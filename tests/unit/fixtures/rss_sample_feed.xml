@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns:media="http://search.yahoo.com/mrss/"
+      xmlns="http://www.w3.org/2005/Atom">
+ <link rel="self" href="http://www.youtube.com/feeds/videos.xml?channel_id=UCkrwgzhIBKccuDsi_SvZtnQ"/>
+ <id>yt:channel:krwgzhIBKccuDsi_SvZtnQ</id>
+ <yt:channelId>UCkrwgzhIBKccuDsi_SvZtnQ</yt:channelId>
+ <title>Forward Guidance</title>
+ <link rel="alternate" href="https://www.youtube.com/channel/UCkrwgzhIBKccuDsi_SvZtnQ"/>
+ <author>
+  <name>Forward Guidance</name>
+  <uri>https://www.youtube.com/channel/UCkrwgzhIBKccuDsi_SvZtnQ</uri>
+ </author>
+ <published>2022-04-12T18:25:39+00:00</published>
+ <entry>
+  <id>yt:video:MO9ZTZPUwXY</id>
+  <yt:videoId>MO9ZTZPUwXY</yt:videoId>
+  <yt:channelId>UCkrwgzhIBKccuDsi_SvZtnQ</yt:channelId>
+  <title>The Macro Outlook for 2026</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=MO9ZTZPUwXY"/>
+  <author>
+   <name>Forward Guidance</name>
+   <uri>https://www.youtube.com/channel/UCkrwgzhIBKccuDsi_SvZtnQ</uri>
+  </author>
+  <published>2026-05-01T13:00:21+00:00</published>
+  <updated>2026-05-01T15:00:00+00:00</updated>
+  <media:group>
+   <media:title>The Macro Outlook for 2026</media:title>
+   <media:content url="https://www.youtube.com/v/MO9ZTZPUwXY?version=3" type="application/x-shockwave-flash" width="640" height="390"/>
+   <media:thumbnail url="https://i4.ytimg.com/vi/MO9ZTZPUwXY/hqdefault.jpg" width="480" height="360"/>
+   <media:description>A wide-ranging conversation about macro markets.</media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:abcDEFghi12</id>
+  <yt:videoId>abcDEFghi12</yt:videoId>
+  <yt:channelId>UCkrwgzhIBKccuDsi_SvZtnQ</yt:channelId>
+  <title>Fed Decision Live Reaction</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=abcDEFghi12"/>
+  <author>
+   <name>Forward Guidance</name>
+   <uri>https://www.youtube.com/channel/UCkrwgzhIBKccuDsi_SvZtnQ</uri>
+  </author>
+  <published>2026-04-28T19:30:00+00:00</published>
+  <updated>2026-04-28T20:30:00+00:00</updated>
+  <media:group>
+   <media:title>Fed Decision Live Reaction</media:title>
+   <media:thumbnail url="https://i4.ytimg.com/vi/abcDEFghi12/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Live reaction to the FOMC announcement.</media:description>
+  </media:group>
+ </entry>
+ <entry>
+  <id>yt:video:zyxWVUtsr98</id>
+  <yt:videoId>zyxWVUtsr98</yt:videoId>
+  <yt:channelId>UCkrwgzhIBKccuDsi_SvZtnQ</yt:channelId>
+  <title>Quick clip — under 10 minutes</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=zyxWVUtsr98"/>
+  <author>
+   <name>Forward Guidance</name>
+   <uri>https://www.youtube.com/channel/UCkrwgzhIBKccuDsi_SvZtnQ</uri>
+  </author>
+  <published>2026-04-25T10:00:00+00:00</published>
+  <updated>2026-04-25T11:00:00+00:00</updated>
+  <media:group>
+   <media:title>Quick clip — under 10 minutes</media:title>
+   <media:thumbnail url="https://i4.ytimg.com/vi/zyxWVUtsr98/hqdefault.jpg" width="480" height="360"/>
+   <media:description>Short clip.</media:description>
+  </media:group>
+ </entry>
+</feed>
