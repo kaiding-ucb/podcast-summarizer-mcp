@@ -17,13 +17,16 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 import subprocess
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pytest
 
 PROFILE_NAME = "video-summarizer-test"
+GATEWAY_PORT = 19002
 HOME = Path.home()
 PROFILE_DIR = HOME / f".openclaw-{PROFILE_NAME}"
 CHANNELS_PATH = PROFILE_DIR / "channels.json"
@@ -31,6 +34,7 @@ STATE_PATH = PROFILE_DIR / "video-state.json"
 ENV_FILE = HOME / ".config" / "video-analysis" / "video-analysis.env"
 
 AGENT_TIMEOUT = 180  # seconds — generous, handles model latency + tool calls
+GATEWAY_BOOT_TIMEOUT = 20
 
 
 def pytest_collection_modifyitems(config, items):
@@ -41,6 +45,72 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if "openclaw" in item.keywords:
             item.add_marker(skip)
+
+
+def _port_open(port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.3)
+        try:
+            s.connect(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+
+
+@pytest.fixture(scope="session")
+def openclaw_gateway():
+    """Boot the OpenClaw gateway for the duration of the test session.
+
+    Workspace bootstrap (AGENTS.md / SOUL.md / IDENTITY.md context) only
+    populates the system prompt when the agent runs through the gateway —
+    --local mode skips that entirely. Tests run via gateway by default.
+    """
+    if not os.environ.get("RUN_OPENCLAW_TESTS") == "1":
+        yield None
+        return
+    key = _load_gemini_key()
+    if not key:
+        pytest.skip("GEMINI_API_KEY not available")
+    if _port_open(GATEWAY_PORT):
+        # Already running (manual launch) — reuse and don't kill on teardown
+        yield None
+        return
+    log_path = PROFILE_DIR / "gateway.log"
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env["GEMINI_API_KEY"] = key
+    proc = subprocess.Popen(
+        [
+            "openclaw",
+            "--profile",
+            PROFILE_NAME,
+            "gateway",
+            "--auth",
+            "none",
+            "--force",
+        ],
+        env=env,
+        stdout=open(log_path, "w"),
+        stderr=subprocess.STDOUT,
+    )
+    deadline = time.time() + GATEWAY_BOOT_TIMEOUT
+    while time.time() < deadline:
+        if _port_open(GATEWAY_PORT):
+            break
+        time.sleep(0.5)
+    else:
+        proc.terminate()
+        pytest.fail(
+            f"gateway did not come up within {GATEWAY_BOOT_TIMEOUT}s; see {log_path}"
+        )
+    try:
+        yield proc
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 def _load_gemini_key() -> str:
@@ -55,8 +125,9 @@ def _load_gemini_key() -> str:
 
 
 @pytest.fixture
-def clean_registry() -> None:
-    """Reset the test profile's persistent state before each test."""
+def clean_registry(openclaw_gateway) -> None:
+    """Reset the test profile's persistent state before each test.
+    Depends on the session-scoped gateway so it's always up first."""
     for p in (CHANNELS_PATH, STATE_PATH):
         if p.exists():
             p.unlink()
@@ -77,29 +148,38 @@ def get_state() -> Dict[str, Dict[str, Any]]:
 
 
 class AgentResponse:
-    """Wrapper around an `openclaw agent` JSON result."""
+    """Wrapper around an `openclaw agent` JSON result.
+
+    Two output shapes exist depending on transport:
+      - Embedded (--local): {payloads, meta} at the top level
+      - Gateway (default):  {runId, status, summary, result: {payloads, meta}}
+    `_inner()` flattens both into the same view.
+    """
 
     def __init__(self, raw: Dict[str, Any]):
         self.raw = raw
 
+    def _inner(self) -> Dict[str, Any]:
+        if "result" in self.raw and isinstance(self.raw["result"], dict):
+            return self.raw["result"]
+        return self.raw
+
     @property
     def visible_text(self) -> str:
-        return self.raw.get("meta", {}).get("finalAssistantVisibleText", "") or ""
+        return self._inner().get("meta", {}).get("finalAssistantVisibleText", "") or ""
 
     @property
     def raw_text(self) -> str:
-        return self.raw.get("meta", {}).get("finalAssistantRawText", "") or ""
+        return self._inner().get("meta", {}).get("finalAssistantRawText", "") or ""
+
+    @property
+    def payloads(self) -> List[Dict[str, Any]]:
+        return self._inner().get("payloads", []) or []
 
     def tool_call_names(self) -> List[str]:
-        """Best-effort: return MCP tool names invoked during the turn.
-
-        OpenClaw embeds tool calls inside `payloads[].toolCalls` or similar
-        nested shapes — fall back to a regex scan of the JSON payload for
-        known tool names if direct lookup fails.
-        """
+        """Best-effort: return MCP tool names invoked during the turn."""
         names: List[str] = []
-        # Direct lookup
-        for p in self.raw.get("payloads", []):
+        for p in self.payloads:
             for call in p.get("toolCalls", []) or []:
                 n = call.get("name") or call.get("toolName")
                 if n:
@@ -138,17 +218,29 @@ class AgentResponse:
         )
 
 
-def send_message(message: str, agent: str = "testbot") -> AgentResponse:
+def send_message(
+    message: str,
+    agent: str = "testbot",
+    session_id: Optional[str] = None,
+) -> AgentResponse:
     """Run one agent turn against the test profile, return parsed result.
 
-    Spawns `openclaw --profile video-summarizer-test agent --agent <id>
-    --local --json -m <message>` and parses the stdout JSON.
+    By default each call gets a unique session-id so the LLM has no
+    cross-test memory. Pass an explicit session_id to chain turns
+    inside a single test (e.g. ask → confirm flows).
     """
     key = _load_gemini_key()
     if not key:
         pytest.fail("GEMINI_API_KEY not available — fix env file or env var")
     env = os.environ.copy()
     env["GEMINI_API_KEY"] = key
+    if session_id is None:
+        # uuid-style fresh id; underscored to avoid OpenClaw routing rules
+        import uuid
+
+        session_id = f"test_{uuid.uuid4().hex[:12]}"
+    # Run through the gateway (not --local) so workspace bootstrap files
+    # (AGENTS.md / SOUL.md / IDENTITY.md) populate the system prompt.
     cmd = [
         "openclaw",
         "--profile",
@@ -156,7 +248,8 @@ def send_message(message: str, agent: str = "testbot") -> AgentResponse:
         "agent",
         "--agent",
         agent,
-        "--local",
+        "--session-id",
+        session_id,
         "--json",
         "-m",
         message,
