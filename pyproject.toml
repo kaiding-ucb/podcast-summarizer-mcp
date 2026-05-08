@@ -1,0 +1,20 @@
+[project]
+name = "video-analysis-mcp"
+version = "0.1.0"
+description = "MCP server for YouTube video analysis via Gemini 3 Flash Preview native video understanding"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "google-genai>=1.0.0",
+    "google-api-python-client>=2.100.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

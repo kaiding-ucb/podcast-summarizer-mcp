@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+
+# Virtual envs
+venv/
+.venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Local state files (default paths if user doesn't override)
+*.json.tmp
+video-analysis-state.json
+video-analysis-batches.json
+channels.json
+
+# Test fixtures cache (if we record at runtime)
+tests/integration/fixtures/.cache/
