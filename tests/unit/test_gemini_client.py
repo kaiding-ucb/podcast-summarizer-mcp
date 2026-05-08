@@ -3,12 +3,7 @@
 The actual Gemini API call is not exercised here (covered by manual smoke tests).
 """
 
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from tools.gemini_client import rewrite_video_urls, validate_timestamps  # noqa: E402
+from tools.gemini_client import rewrite_video_urls, validate_timestamps
 
 
 def test_rewrite_video_urls_replaces_hallucinated_hash():

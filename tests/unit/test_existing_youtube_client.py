@@ -1,12 +1,8 @@
 """Tests for tools/youtube_client.py — pure helpers + mocked API calls."""
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from tools.youtube_client import YouTubeClient  # noqa: E402
+from tools.youtube_client import YouTubeClient
 
 
 def test_extract_video_id_watch_url():
