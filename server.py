@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from tools.discovery import DiscoveryClient
 from tools.gemini_client import GeminiClient
 from tools.jobs import store as jobs_store, start_heartbeat_monitor, _now_iso
 from tools.models import (
@@ -18,19 +19,17 @@ from tools.models import (
     VideoInfo,
 )
 from tools.state import StateStore
-from tools.youtube_client import YouTubeClient
 from mcp_idle_watchdog import install_idle_watchdog, track_request
 
-mcp = FastMCP("Video Analysis")
+mcp = FastMCP("Video Summarizer")
 
-YOUTUBE_KEY = os.environ["YOUTUBE_API_KEY"]
 GEMINI_KEY = os.environ["GEMINI_API_KEY"]
 STATE_PATH = os.environ.get(
     "VIDEO_ANALYSIS_STATE_PATH",
-    os.path.expanduser("~/.openclaw/video-analysis-state.json"),
+    os.path.expanduser("~/.video-summarizer-mcp/video-state.json"),
 )
 
-_yt = YouTubeClient(YOUTUBE_KEY)
+_yt = DiscoveryClient()
 _gm = GeminiClient(GEMINI_KEY)
 _state = StateStore(STATE_PATH)
 
