@@ -7,6 +7,8 @@ from typing import Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from tools import channel_search
+from tools.channel_registry import ChannelRegistry
 from tools.discovery import DiscoveryClient
 from tools.gemini_client import GeminiClient
 from tools.jobs import store as jobs_store, start_heartbeat_monitor, _now_iso
@@ -28,20 +30,32 @@ STATE_PATH = os.environ.get(
     "VIDEO_ANALYSIS_STATE_PATH",
     os.path.expanduser("~/.video-summarizer-mcp/video-state.json"),
 )
+CHANNELS_PATH = os.environ.get(
+    "VIDEO_ANALYSIS_CHANNELS_PATH",
+    os.path.expanduser("~/.video-summarizer-mcp/channels.json"),
+)
 
 _yt = DiscoveryClient()
 _gm = GeminiClient(GEMINI_KEY)
 _state = StateStore(STATE_PATH)
+_channels = ChannelRegistry(CHANNELS_PATH)
 
 
 @mcp.tool()
 @track_request
 def discover_new_videos(
-    channel_ids: List[str],
+    channel_ids: Optional[List[str]] = None,
+    tag: Optional[str] = None,
     max_per_channel: int = 5,
     min_duration_seconds: int = 600,
 ) -> dict:
     """Discover new videos from YouTube channels since the last time this MCP saw them.
+
+    Two modes for selecting channels:
+      1. Pass `channel_ids` explicitly (legacy behavior).
+      2. Omit `channel_ids` and the MCP reads from its tracked-channel registry
+         (managed by add_tracked_channel / remove_tracked_channel). Use `tag` to
+         filter the registry — e.g. tag="macro" returns only channels tagged macro.
 
     State is tracked per channel in a server-managed JSON file. On the FIRST call for a
     channel, the most recent video is returned (and state is seeded) so the caller has
@@ -53,7 +67,8 @@ def discover_new_videos(
       - Videos older than or equal to the last-seen video are skipped
 
     Args:
-      channel_ids: YouTube channel IDs (e.g. "UCkrwgzhIBKccuDsi_SvZtnQ")
+      channel_ids: Optional list of YouTube channel IDs. If omitted, the registry is used.
+      tag: Optional tag filter for registry-based mode (ignored if channel_ids given).
       max_per_channel: How many recent uploads to inspect per channel (default 5)
       min_duration_seconds: Minimum video length to include (default 600 = 10min)
 
@@ -64,6 +79,9 @@ def discover_new_videos(
     new_videos: List[VideoInfo] = []
     skipped: List[SkippedVideo] = []
     first_run: List[str] = []
+
+    if channel_ids is None:
+        channel_ids = _channels.get_channel_ids(tag=tag)
 
     for cid in channel_ids:
         last_seen = _state.get_last_video_id(cid)
@@ -402,6 +420,154 @@ def get_state(channel_ids: Optional[List[str]] = None) -> dict:
     """
     rows = _state.snapshot(channel_ids)
     return StateSnapshot(channels=[ChannelState(**r) for r in rows]).model_dump()
+
+
+# ---------- Channel discovery (no-key YouTube search) ----------
+
+
+@mcp.tool()
+@track_request
+def search_youtube_channels(query: str, max_results: int = 5) -> dict:
+    """Search YouTube for channels matching a free-text query.
+
+    Use this when the user names a channel ("Forward Guidance", "All-In podcast")
+    or describes one ("a good macro investing channel") and you need to identify
+    candidate channels before adding to the registry.
+
+    No YouTube API key required — uses yt-dlp scraping under the hood.
+
+    Args:
+      query: Free-text search term, e.g. "Forward Guidance" or "macro investing".
+      max_results: How many distinct channels to return, ranked by relevance (default 5).
+
+    Returns:
+      { "candidates": [
+          { "channel_id", "name", "channel_url", "hit_count",
+            "confidence_score" },
+          ...
+        ] }
+      Empty list if nothing matches. Subscriber count + recent videos are NOT
+      populated here — call get_channel_metadata(channel_id) for that.
+    """
+    candidates = channel_search.search_youtube_channels(query, max_results=max_results)
+    return {"candidates": candidates, "query": query}
+
+
+@mcp.tool()
+@track_request
+def resolve_youtube_channel(handle_or_url: str) -> dict:
+    """Resolve a YouTube handle (@name) or channel URL to channel metadata.
+
+    Use this when the user gives an exact handle or URL — skips the search step.
+    Returns None / error for video URLs, free-text strings, or channels that
+    can't be loaded.
+
+    Args:
+      handle_or_url: e.g. "@ForwardGuidance" or
+                    "https://www.youtube.com/@ForwardGuidance" or
+                    "https://www.youtube.com/channel/UCxxxxx".
+
+    Returns:
+      { channel_id, name, handle, description, subscriber_count,
+        channel_url, recent_video_titles } on success.
+      { "error": "..." } on failure.
+    """
+    info = channel_search.resolve_youtube_channel(handle_or_url)
+    if info is None:
+        return {"error": "could not resolve channel", "input": handle_or_url}
+    return info
+
+
+@mcp.tool()
+@track_request
+def get_channel_metadata(channel_id: str) -> dict:
+    """Fetch full metadata for a known channel_id.
+
+    Use after search_youtube_channels to enrich a candidate with subscriber
+    count, description, and recent video titles before presenting to the user.
+
+    Args:
+      channel_id: YouTube channel ID (must start with "UC").
+
+    Returns:
+      { channel_id, name, handle, description, subscriber_count,
+        channel_url, recent_video_titles }.
+    """
+    try:
+        return channel_search.get_channel_metadata(channel_id)
+    except ValueError as e:
+        return {"error": str(e), "channel_id": channel_id}
+
+
+# ---------- Tracked-channel registry (MCP-owned state) ----------
+
+
+@mcp.tool()
+@track_request
+def add_tracked_channel(
+    channel_id: str,
+    name: str,
+    handle: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+) -> dict:
+    """Add a channel to the registry so discover_new_videos picks it up.
+
+    Idempotent: re-adding the same channel_id updates name/handle/tags but
+    preserves the original added_at timestamp. Tags are arbitrary strings —
+    use them to group channels (e.g. ["macro"], ["semis", "podcast"]).
+
+    Args:
+      channel_id: YouTube channel ID, must start with "UC".
+      name: Display name (the user-friendly label).
+      handle: Optional "@handle" (cosmetic, helps users identify the channel).
+      tags: Optional list of grouping strings (default empty).
+
+    Returns:
+      { added: true, channel: {channel_id, name, handle, tags, added_at} }.
+    """
+    try:
+        record = _channels.add(
+            channel_id=channel_id, name=name, handle=handle, tags=tags or []
+        )
+    except ValueError as e:
+        return {"error": str(e), "channel_id": channel_id}
+    return {"added": True, "channel": {"channel_id": channel_id, **record}}
+
+
+@mcp.tool()
+@track_request
+def remove_tracked_channel(channel_id: str) -> dict:
+    """Remove a channel from the registry.
+
+    No-op (returns existed=false) if the channel_id wasn't tracked.
+    Does NOT clear the per-channel last-seen state, so re-adding later
+    won't re-ingest the backlog.
+
+    Args:
+      channel_id: YouTube channel ID.
+
+    Returns:
+      { removed: true|false, channel_id }.
+    """
+    existed = _channels.remove(channel_id)
+    return {"removed": existed, "channel_id": channel_id}
+
+
+@mcp.tool()
+@track_request
+def list_tracked_channels(tag: Optional[str] = None) -> dict:
+    """List all channels currently in the registry.
+
+    Args:
+      tag: If provided, return only channels carrying this tag.
+
+    Returns:
+      { channels: [
+          {channel_id, name, handle, tags, added_at}, ...
+        ], count, tag }.
+    """
+    channels = _channels.list_channels(tag=tag)
+    return {"channels": channels, "count": len(channels), "tag": tag}
 
 
 if __name__ == "__main__":
