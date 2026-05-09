@@ -202,6 +202,17 @@ def analyze_video_start(
 ) -> dict:
     """Launch Gemini video analysis as a background job. Returns in <1s with a job_id.
 
+    **This is the default for both single-video and multi-video requests.**
+    For multiple videos, fire this tool N times back-to-back (each call
+    returns in <1s with its own job_id) — the analyses run concurrently
+    in background threads, so wall-clock time is bounded by the slowest
+    single video (~3-10 min), NOT N × per-video time. Then poll
+    `analyze_video_result(job_id)` for each job_id.
+
+    Use `analyze_videos_batch_start` ONLY when the user explicitly says
+    "no rush", "overnight", or for scheduled / cron digests where minutes-
+    to-hours latency is acceptable in exchange for 50% cost savings.
+
     Podcast-length videos take Gemini 3-15 min to analyze, which exceeds openclaw's
     60s MCP request timeout. This tool spawns a background thread and returns
     immediately; poll `analyze_video_result(job_id)` to get the finished analysis.
@@ -307,9 +318,12 @@ def analyze_videos_batch_start(
 ) -> dict:
     """Submit a batch of YouTube videos to Gemini Batch API for async analysis.
 
-    Batch processing is 50% cheaper than `analyze_video_start` and typically
-    completes within minutes (24h SLA max). Use this for daily cron digests
-    where you have multiple videos to analyze at once.
+    **Use this ONLY when the user explicitly says "no rush", "overnight",
+    "do it later", or for scheduled cron digests.** Batch is 50% cheaper
+    than `analyze_video_start` but the wall-clock SLA is up to 24 hours
+    (typically 15-60 min). For interactive requests — even multi-video
+    ones like "summarize today's new videos" — prefer `analyze_video_start`
+    fired N times in parallel (~5-10 min wall-clock for any N).
 
     Args:
       video_urls: List of full YouTube URLs (https://www.youtube.com/watch?v=...)
