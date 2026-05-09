@@ -132,7 +132,12 @@ def discover_new_videos(
     ).model_dump()
 
 
-def _run_analysis(job_id: str, video_url: str, max_retries: int) -> None:
+def _run_analysis(
+    job_id: str,
+    video_url: str,
+    max_retries: int,
+    prompt: Optional[str] = None,
+) -> None:
     """Background worker: metadata lookup + Gemini analysis, writes to jobs_store.
 
     A sibling heartbeat-monitor thread writes `last_heartbeat_at` every
@@ -157,6 +162,7 @@ def _run_analysis(job_id: str, video_url: str, max_retries: int) -> None:
             video_id=info["video_id"],
             video_duration=info["duration"],
             max_retries=max_retries,
+            prompt=prompt,
         )
         payload = AnalysisResult(**result).model_dump()
         if payload.get("success"):
@@ -189,7 +195,11 @@ def _run_analysis(job_id: str, video_url: str, max_retries: int) -> None:
 
 @mcp.tool()
 @track_request
-def analyze_video_start(video_url: str, max_retries: int = 3) -> dict:
+def analyze_video_start(
+    video_url: str,
+    max_retries: int = 3,
+    prompt: Optional[str] = None,
+) -> dict:
     """Launch Gemini video analysis as a background job. Returns in <1s with a job_id.
 
     Podcast-length videos take Gemini 3-15 min to analyze, which exceeds openclaw's
@@ -202,6 +212,11 @@ def analyze_video_start(video_url: str, max_retries: int = 3) -> dict:
     Args:
       video_url: Full YouTube URL (https://www.youtube.com/watch?v=...)
       max_retries: How many Gemini retries on empty/short output (default 3)
+      prompt: Optional override for the analysis prompt. If None, the
+        default ships with an investment-podcast persona — set
+        $VIDEO_ANALYSIS_PROMPT_PATH to change the host-wide default,
+        or pass `prompt` here for a one-off override (e.g. "summarize
+        this technical talk in 5 bullets").
 
     Returns:
       { job_id, video_url, status: "pending" }
@@ -209,7 +224,7 @@ def analyze_video_start(video_url: str, max_retries: int = 3) -> dict:
     job_id = jobs_store.create(video_url)
     threading.Thread(
         target=_run_analysis,
-        args=(job_id, video_url, max_retries),
+        args=(job_id, video_url, max_retries, prompt),
         daemon=True,
         name=f"analyze-{job_id[:8]}",
     ).start()
@@ -286,7 +301,10 @@ def _save_batch_metadata(data: Dict[str, dict]) -> None:
 
 @mcp.tool()
 @track_request
-def analyze_videos_batch_start(video_urls: List[str]) -> dict:
+def analyze_videos_batch_start(
+    video_urls: List[str],
+    prompt: Optional[str] = None,
+) -> dict:
     """Submit a batch of YouTube videos to Gemini Batch API for async analysis.
 
     Batch processing is 50% cheaper than `analyze_video_start` and typically
@@ -295,6 +313,10 @@ def analyze_videos_batch_start(video_urls: List[str]) -> dict:
 
     Args:
       video_urls: List of full YouTube URLs (https://www.youtube.com/watch?v=...)
+      prompt: Optional override for the analysis prompt. If None, the
+        default ships with an investment-podcast persona — set
+        $VIDEO_ANALYSIS_PROMPT_PATH to change the host-wide default,
+        or pass `prompt` here for a per-batch override.
 
     Returns:
       { batch_job_name, video_count, video_urls, status: "pending",
@@ -324,7 +346,9 @@ def analyze_videos_batch_start(video_urls: List[str]) -> dict:
     if not entries:
         return {"error": "no valid videos to analyze", "skipped": skipped}
 
-    batch_job_name = _gm.submit_batch(entries, display_name="video-analysis-batch")
+    batch_job_name = _gm.submit_batch(
+        entries, display_name="video-analysis-batch", prompt=prompt
+    )
 
     with _batch_meta_lock:
         all_meta = _load_batch_metadata()

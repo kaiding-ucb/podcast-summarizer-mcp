@@ -137,6 +137,48 @@ cat ~/.openclaw-video-summarizer-test/video-state.json | python3 -m json.tool
 
 ---
 
+## Customizing the analysis prompt
+
+The default prompt (in `tools/gemini_client.py:DEFAULT_PROMPT` and
+`prompts/investment-podcast.md`) is tuned for investment podcasts —
+it asks Gemini to extract stock/sector/strategy recommendations and
+exclude sponsor reads.
+
+For other content types, override:
+
+**Host-wide (env var, persistent across all calls):**
+```bash
+export VIDEO_ANALYSIS_PROMPT_PATH=/Users/kai/Documents/test/video-summarizer-mcp/prompts/technical-talk.md
+.venv/bin/python tests/openclaw/setup_profile.py --reset   # picks up new env var
+openclaw --profile video-summarizer-test chat --local
+```
+
+The MCP re-reads the file on every analysis call — edit the file and
+the next analysis uses the updated prompt; no MCP restart needed.
+
+**Per-call (LLM agent passes it in the tool call):**
+The MCP tools `analyze_video_start` and `analyze_videos_batch_start`
+accept a `prompt` argument. In the TUI you can ask things like:
+
+```
+Summarize this technical talk in 5 bullets focused on architecture
+decisions: https://www.youtube.com/watch?v=...
+```
+
+The agent will call `analyze_video_start(video_url=..., prompt="...")`
+with a one-off prompt for that video.
+
+**Provided prompt library (`prompts/`):**
+- `investment-podcast.md` (the default)
+- `technical-talk.md` — engineering conference talks, deep dives
+- `interview.md` — long-form Q&A, focuses on the guest
+- `news-briefing.md` — daily wraps, market summaries
+
+Copy the closest one, edit to taste, point `VIDEO_ANALYSIS_PROMPT_PATH`
+at your edited file.
+
+---
+
 ## 6. Test the video-summary path (paid Gemini)
 
 After adding at least one channel, in the TUI:
