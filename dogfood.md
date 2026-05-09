@@ -89,8 +89,12 @@ you don't need to launch it separately.
 ## 4. Open a second terminal for queries
 
 Because step 3's gateway is occupying the first terminal, **open a new
-terminal window/tab** for everything below. The new terminal starts
-fresh, so re-export the env var and define a one-line helper:
+terminal window/tab** for everything below.
+
+**You don't start anything new here** — the gateway from step 3 is
+already running in the first terminal. This second terminal just sends
+queries *to* it over `127.0.0.1:19002`. Just paste the helper below
+and start asking:
 
 ```bash
 export GEMINI_API_KEY=$(grep ^GEMINI_API_KEY ~/.config/video-analysis/video-analysis.env | cut -d= -f2-)
