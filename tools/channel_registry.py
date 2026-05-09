@@ -86,7 +86,12 @@ class ChannelRegistry:
         handle: Optional[str] = None,
         tags: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Add (or update) a channel. Returns the stored record."""
+        """Add (or update) a channel.
+
+        Returns a dict with the stored record PLUS a fresh post-add
+        summary of the registry so callers can present concrete state
+        rather than inventing it: {record, total_count, all_names}.
+        """
         if not _CHANNEL_ID_RE.match(channel_id):
             raise ValueError(
                 f"channel_id must look like 'UCxxxxxxxxxxxxxxxxxxxxxx', got: {channel_id!r}"
@@ -106,20 +111,36 @@ class ChannelRegistry:
                 record["added_at"] = existing.get("added_at", record["added_at"])
             data["channels"][channel_id] = record
             self._atomic_write(data)
-            return record
+            return {
+                "record": record,
+                "total_count": len(data["channels"]),
+                "all_names": sorted(
+                    r.get("name", "") for r in data["channels"].values()
+                ),
+            }
 
         return self._with_lock(_do)
 
-    def remove(self, channel_id: str) -> bool:
-        """Remove a channel. Returns True if it existed, False otherwise."""
+    def remove(self, channel_id: str) -> Dict[str, Any]:
+        """Remove a channel.
 
-        def _do() -> bool:
+        Returns {removed: bool, total_count, all_names} — same fresh
+        registry summary as add() so callers can report concrete state.
+        """
+
+        def _do() -> Dict[str, Any]:
             data = self._safe_read()
-            if channel_id in data["channels"]:
+            existed = channel_id in data["channels"]
+            if existed:
                 del data["channels"][channel_id]
                 self._atomic_write(data)
-                return True
-            return False
+            return {
+                "removed": existed,
+                "total_count": len(data["channels"]),
+                "all_names": sorted(
+                    r.get("name", "") for r in data["channels"].values()
+                ),
+            }
 
         return self._with_lock(_do)
 

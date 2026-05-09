@@ -548,7 +548,10 @@ def add_tracked_channel(
     handle: Optional[str] = None,
     tags: Optional[List[str]] = None,
 ) -> dict:
-    """Add a channel to the registry so discover_new_videos picks it up.
+    """Add a channel to the registry. **You MUST call this tool to add a
+    channel — claiming "I've added X" without invoking it leaves the
+    user's registry empty and the user has no way to know until they
+    next ask "what am I tracking" and discover the missing channels.**
 
     Idempotent: re-adding the same channel_id updates name/handle/tags but
     preserves the original added_at timestamp. Tags are arbitrary strings —
@@ -561,23 +564,44 @@ def add_tracked_channel(
       tags: Optional list of grouping strings (default empty).
 
     Returns:
-      { added: true, channel: {channel_id, name, handle, tags, added_at} }.
+      { added: true,
+        channel: {channel_id, name, handle, tags, added_at},
+        registry_total: <int>,
+        registry_now_contains: [name, name, ...],   # alphabetical
+        user_facing_message: "Added X. Registry now has N channels: ..." }
+      Use `user_facing_message` verbatim when telling the user the result —
+      it carries the freshly-verified state and prevents misreporting.
     """
     try:
-        record = _channels.add(
+        result = _channels.add(
             channel_id=channel_id, name=name, handle=handle, tags=tags or []
         )
     except ValueError as e:
         return {"error": str(e), "channel_id": channel_id}
-    return {"added": True, "channel": {"channel_id": channel_id, **record}}
+    record = result["record"]
+    total = result["total_count"]
+    names = result["all_names"]
+    return {
+        "added": True,
+        "channel": {"channel_id": channel_id, **record},
+        "registry_total": total,
+        "registry_now_contains": names,
+        "user_facing_message": (
+            f"Added {name} ({handle or channel_id}). "
+            f"Registry now has {total} channel{'s' if total != 1 else ''}: "
+            f"{', '.join(names)}."
+        ),
+    }
 
 
 @mcp.tool()
 @track_request
 def remove_tracked_channel(channel_id: str) -> dict:
-    """Remove a channel from the registry.
+    """Remove a channel from the registry. **You MUST call this tool to
+    remove — claiming "I've removed X" without invoking it leaves the
+    channel still tracked and produces silently wrong state.**
 
-    No-op (returns existed=false) if the channel_id wasn't tracked.
+    No-op (returns removed=false) if the channel_id wasn't tracked.
     Does NOT clear the per-channel last-seen state, so re-adding later
     won't re-ingest the backlog.
 
@@ -585,27 +609,74 @@ def remove_tracked_channel(channel_id: str) -> dict:
       channel_id: YouTube channel ID.
 
     Returns:
-      { removed: true|false, channel_id }.
+      { removed: true|false,
+        channel_id,
+        registry_total: <int>,
+        registry_now_contains: [name, name, ...],
+        user_facing_message: "Removed X. Registry now has N channels: ..." }
+      Use `user_facing_message` verbatim when reporting back to the user.
     """
-    existed = _channels.remove(channel_id)
-    return {"removed": existed, "channel_id": channel_id}
+    result = _channels.remove(channel_id)
+    removed = result["removed"]
+    total = result["total_count"]
+    names = result["all_names"]
+    if removed:
+        msg = (
+            f"Removed channel {channel_id}. "
+            f"Registry now has {total} channel{'s' if total != 1 else ''}"
+            + (f": {', '.join(names)}." if names else ".")
+        )
+    else:
+        msg = (
+            f"No change — {channel_id} was not in the registry. "
+            f"Registry still has {total} channel{'s' if total != 1 else ''}"
+            + (f": {', '.join(names)}." if names else ".")
+        )
+    return {
+        "removed": removed,
+        "channel_id": channel_id,
+        "registry_total": total,
+        "registry_now_contains": names,
+        "user_facing_message": msg,
+    }
 
 
 @mcp.tool()
 @track_request
 def list_tracked_channels(tag: Optional[str] = None) -> dict:
-    """List all channels currently in the registry.
+    """List all channels currently in the registry. **Always call this
+    tool when the user asks "what am I tracking" or similar — never
+    answer from memory or prior conversation context, since the
+    registry can be mutated by other clients between turns.**
 
     Args:
       tag: If provided, return only channels carrying this tag.
 
     Returns:
-      { channels: [
-          {channel_id, name, handle, tags, added_at}, ...
-        ], count, tag }.
+      { channels: [{channel_id, name, handle, tags, added_at}, ...],
+        count, tag,
+        user_facing_message: "Tracking N channels: ..." or "No channels tracked." }
+      Use `user_facing_message` verbatim when reporting back.
     """
     channels = _channels.list_channels(tag=tag)
-    return {"channels": channels, "count": len(channels), "tag": tag}
+    count = len(channels)
+    if count == 0:
+        msg = "No channels are currently tracked."
+        if tag:
+            msg = f"No channels tagged {tag!r} are currently tracked."
+    else:
+        names = [c.get("name", c["channel_id"]) for c in channels]
+        suffix = f" tagged {tag!r}" if tag else ""
+        msg = (
+            f"Tracking {count} channel{'s' if count != 1 else ''}"
+            f"{suffix}: {', '.join(names)}."
+        )
+    return {
+        "channels": channels,
+        "count": count,
+        "tag": tag,
+        "user_facing_message": msg,
+    }
 
 
 if __name__ == "__main__":

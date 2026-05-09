@@ -145,6 +145,41 @@ def test_get_channel_ids_filters_by_tag(registry: ChannelRegistry):
     assert registry.get_channel_ids(tag="macro") == ["UCkrwgzhIBKccuDsi_SvZtnQ"]
 
 
+# ---------- rich return shape (option B — gives the LLM concrete state
+#            so it can quote facts instead of hallucinating success) ----
+
+
+def test_add_returns_record_total_and_all_names(registry: ChannelRegistry):
+    result = registry.add(channel_id="UCkrwgzhIBKccuDsi_SvZtnQ", name="Forward Guidance")
+    assert result["record"]["name"] == "Forward Guidance"
+    assert result["total_count"] == 1
+    assert result["all_names"] == ["Forward Guidance"]
+
+
+def test_add_returns_growing_total_across_adds(registry: ChannelRegistry):
+    a = registry.add(channel_id="UCkrwgzhIBKccuDsi_SvZtnQ", name="Forward Guidance")
+    b = registry.add(channel_id="UC" + "x" * 22, name="Other Channel")
+    assert a["total_count"] == 1
+    assert b["total_count"] == 2
+    assert sorted(b["all_names"]) == ["Forward Guidance", "Other Channel"]
+
+
+def test_remove_returns_status_total_and_all_names(registry: ChannelRegistry):
+    registry.add(channel_id="UCkrwgzhIBKccuDsi_SvZtnQ", name="FG")
+    registry.add(channel_id="UC" + "x" * 22, name="Other")
+    result = registry.remove("UCkrwgzhIBKccuDsi_SvZtnQ")
+    assert result["removed"] is True
+    assert result["total_count"] == 1
+    assert result["all_names"] == ["Other"]
+
+
+def test_remove_nonexistent_returns_removed_false(registry: ChannelRegistry):
+    result = registry.remove("UCdoesnotexistxxxxxxxxx")
+    assert result["removed"] is False
+    assert result["total_count"] == 0
+    assert result["all_names"] == []
+
+
 # ---------- crash safety ----------
 
 
