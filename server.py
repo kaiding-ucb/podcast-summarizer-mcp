@@ -21,7 +21,6 @@ from tools.models import (
     VideoInfo,
 )
 from tools.state import StateStore
-from mcp_idle_watchdog import install_idle_watchdog, track_request
 
 mcp = FastMCP("Video Summarizer")
 
@@ -42,7 +41,6 @@ _channels = ChannelRegistry(CHANNELS_PATH)
 
 
 @mcp.tool()
-@track_request
 def discover_new_videos(
     channel_ids: Optional[List[str]] = None,
     tag: Optional[str] = None,
@@ -194,7 +192,6 @@ def _run_analysis(
 
 
 @mcp.tool()
-@track_request
 def analyze_video_start(
     video_url: str,
     max_retries: int = 3,
@@ -213,9 +210,11 @@ def analyze_video_start(
     "no rush", "overnight", or for scheduled / cron digests where minutes-
     to-hours latency is acceptable in exchange for 50% cost savings.
 
-    Podcast-length videos take Gemini 3-15 min to analyze, which exceeds openclaw's
-    60s MCP request timeout. This tool spawns a background thread and returns
-    immediately; poll `analyze_video_result(job_id)` to get the finished analysis.
+    Podcast-length videos take Gemini 3-15 min to analyze, which exceeds typical
+    MCP host request timeouts (Claude Desktop, Claude Code, OpenClaw all cap
+    individual tool calls at ~60s). This tool spawns a background thread and
+    returns immediately; poll `analyze_video_result(job_id)` to get the
+    finished analysis.
 
     Does NOT update discovery state. Caller is responsible for calling
     discover_new_videos (which manages state) beforehand.
@@ -248,15 +247,13 @@ def analyze_video_start(
 
 
 @mcp.tool()
-@track_request
 def analyze_video_result(job_id: str, wait_seconds: int = 10) -> dict:
     """Poll for an analyze_video_start result. Blocks up to wait_seconds for a state change.
 
-    Default wait_seconds=10 was lowered from 45 for symmetry with x-search's
-    search_x_result after a 2026-04-22 heartbeat where a blocking 45s wait
-    exceeded openclaw's 60s MCP-client cap under concurrent load. Smaller
-    blocking window = guaranteed return well under 60s at the cost of more
-    poll round-trips (cheap).
+    Default wait_seconds=10 keeps the blocking window well under the typical
+    60s MCP request timeout enforced by hosts. Smaller blocking window =
+    guaranteed return well under 60s at the cost of more poll round-trips
+    (cheap, ~1KB per poll).
 
     Recommended pattern: call with wait_seconds=10 each poll. Cap total
     polling at ~90 iterations (~15 min) — most podcasts finish within 3-5 min.
@@ -287,7 +284,7 @@ def analyze_video_result(job_id: str, wait_seconds: int = 10) -> dict:
 
 _BATCH_METADATA_PATH = os.environ.get(
     "VIDEO_ANALYSIS_BATCH_METADATA_PATH",
-    os.path.expanduser("~/.openclaw/video-analysis-batches.json"),
+    os.path.expanduser("~/.video-summarizer-mcp/batches.json"),
 )
 _batch_meta_lock = threading.Lock()
 
@@ -311,7 +308,6 @@ def _save_batch_metadata(data: Dict[str, dict]) -> None:
 
 
 @mcp.tool()
-@track_request
 def analyze_videos_batch_start(
     video_urls: List[str],
     prompt: Optional[str] = None,
@@ -382,7 +378,6 @@ def analyze_videos_batch_start(
 
 
 @mcp.tool()
-@track_request
 def analyze_videos_batch_result(batch_job_name: str) -> dict:
     """Poll the Gemini Batch API once; if done, return per-video results.
 
@@ -427,7 +422,6 @@ def analyze_videos_batch_result(batch_job_name: str) -> dict:
 
 
 @mcp.tool()
-@track_request
 def get_video_info(video_url: str, min_duration_seconds: int = 600) -> dict:
     """Cheap metadata-only lookup for a single YouTube video (1 YouTube API unit).
 
@@ -445,7 +439,6 @@ def get_video_info(video_url: str, min_duration_seconds: int = 600) -> dict:
 
 
 @mcp.tool()
-@track_request
 def get_state(channel_ids: Optional[List[str]] = None) -> dict:
     """Read-only view of the discovery state file.
 
@@ -464,7 +457,6 @@ def get_state(channel_ids: Optional[List[str]] = None) -> dict:
 
 
 @mcp.tool()
-@track_request
 def search_youtube_channels(query: str, max_results: int = 5) -> dict:
     """Search YouTube for channels matching a free-text query.
 
@@ -492,7 +484,6 @@ def search_youtube_channels(query: str, max_results: int = 5) -> dict:
 
 
 @mcp.tool()
-@track_request
 def resolve_youtube_channel(handle_or_url: str) -> dict:
     """Resolve a YouTube handle (@name) or channel URL to channel metadata.
 
@@ -517,7 +508,6 @@ def resolve_youtube_channel(handle_or_url: str) -> dict:
 
 
 @mcp.tool()
-@track_request
 def get_channel_metadata(channel_id: str) -> dict:
     """Fetch full metadata for a known channel_id.
 
@@ -541,7 +531,6 @@ def get_channel_metadata(channel_id: str) -> dict:
 
 
 @mcp.tool()
-@track_request
 def add_tracked_channel(
     channel_id: str,
     name: str,
@@ -595,7 +584,6 @@ def add_tracked_channel(
 
 
 @mcp.tool()
-@track_request
 def remove_tracked_channel(channel_id: str) -> dict:
     """Remove a channel from the registry. **You MUST call this tool to
     remove — claiming "I've removed X" without invoking it leaves the
@@ -642,7 +630,6 @@ def remove_tracked_channel(channel_id: str) -> dict:
 
 
 @mcp.tool()
-@track_request
 def list_tracked_channels(tag: Optional[str] = None) -> dict:
     """List all channels currently in the registry. **Always call this
     tool when the user asks "what am I tracking" or similar — never
@@ -679,18 +666,14 @@ def list_tracked_channels(tag: Optional[str] = None) -> dict:
     }
 
 
-if __name__ == "__main__":
-    install_idle_watchdog(
-        server_name="video-analysis",
-        # idle-exit disabled: holds no constrained external resource (HTTPS
-        # to Gemini + YouTube, no persistent handle). Analysis runs in
-        # background threads that the per-request tracker doesn't see, so
-        # any idle-exit would orphan in-flight jobs. Keep the process alive
-        # across long idle gaps to avoid the stale-transport trap.
-        idle_timeout_seconds=0,
-        # request_max applies only to synchronous tool calls (discover,
-        # start, result, get_video_info, get_state) — all fast. Keep a
-        # modest guard so a hung MCP request can't permanently wedge it.
-        request_max_seconds=120,
-    )
+def main() -> None:
+    """Entry point for the `video-summarizer-mcp` console script.
+
+    Communicates over stdio with any MCP host (Claude Desktop, Claude
+    Code, OpenClaw, etc.). Process lifecycle is the host's responsibility.
+    """
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()
