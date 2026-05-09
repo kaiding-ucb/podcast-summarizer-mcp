@@ -66,23 +66,31 @@ Agents:
 
 ---
 
-## 3. Start the gateway in one terminal
+## 3. Start the gateway (same terminal as step 2 is fine)
+
+Step 2 (`agents list`) printed and exited, so this terminal is free.
+Run the gateway here:
 
 ```bash
 GEMINI_API_KEY=$(grep ^GEMINI_API_KEY ~/.config/video-analysis/video-analysis.env | cut -d= -f2-) \
   openclaw --profile video-summarizer-test gateway --auth none --force
 ```
 
-Leave this running. You'll see boot logs ending with the gateway
-listening on `127.0.0.1:19002`. The MCP server (`start_server.sh`) is
-spawned on demand by the agent — you don't need to launch it
-separately.
+This is a **long-running foreground process** — it will keep printing
+logs and won't return to a prompt. You'll see boot output ending with
+the gateway listening on `127.0.0.1:19002`. Leave it running and don't
+Ctrl-C until you're done testing.
+
+The MCP server (`start_server.sh`) is spawned on demand by the agent —
+you don't need to launch it separately.
 
 ---
 
-## 4. Send queries from a second terminal
+## 4. Open a second terminal for queries
 
-Set up a one-line helper:
+Because step 3's gateway is occupying the first terminal, **open a new
+terminal window/tab** for everything below. The new terminal starts
+fresh, so re-export the env var and define a one-line helper:
 
 ```bash
 export GEMINI_API_KEY=$(grep ^GEMINI_API_KEY ~/.config/video-analysis/video-analysis.env | cut -d= -f2-)
