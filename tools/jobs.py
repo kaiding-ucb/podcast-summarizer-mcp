@@ -189,7 +189,7 @@ class JobStore:
 # Override with VIDEO_ANALYSIS_JOBS_PATH env var.
 _DEFAULT_JOBS_PATH = os.environ.get(
     "VIDEO_ANALYSIS_JOBS_PATH",
-    os.path.expanduser("~/.video-summarizer-mcp/jobs.json"),
+    os.path.expanduser("~/.podcast-summarizer-mcp/jobs.json"),
 )
 
 store = JobStore(_DEFAULT_JOBS_PATH)

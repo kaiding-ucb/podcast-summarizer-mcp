@@ -22,16 +22,16 @@ from tools.models import (
 )
 from tools.state import StateStore
 
-mcp = FastMCP("Video Summarizer")
+mcp = FastMCP("Podcast Summarizer")
 
 GEMINI_KEY = os.environ["GEMINI_API_KEY"]
 STATE_PATH = os.environ.get(
     "VIDEO_ANALYSIS_STATE_PATH",
-    os.path.expanduser("~/.video-summarizer-mcp/video-state.json"),
+    os.path.expanduser("~/.podcast-summarizer-mcp/video-state.json"),
 )
 CHANNELS_PATH = os.environ.get(
     "VIDEO_ANALYSIS_CHANNELS_PATH",
-    os.path.expanduser("~/.video-summarizer-mcp/channels.json"),
+    os.path.expanduser("~/.podcast-summarizer-mcp/channels.json"),
 )
 
 _yt = DiscoveryClient()
@@ -284,7 +284,7 @@ def analyze_video_result(job_id: str, wait_seconds: int = 10) -> dict:
 
 _BATCH_METADATA_PATH = os.environ.get(
     "VIDEO_ANALYSIS_BATCH_METADATA_PATH",
-    os.path.expanduser("~/.video-summarizer-mcp/batches.json"),
+    os.path.expanduser("~/.podcast-summarizer-mcp/batches.json"),
 )
 _batch_meta_lock = threading.Lock()
 
@@ -667,7 +667,7 @@ def list_tracked_channels(tag: Optional[str] = None) -> dict:
 
 
 def main() -> None:
-    """Entry point for the `video-summarizer-mcp` console script.
+    """Entry point for the `podcast-summarizer-mcp` console script.
 
     Communicates over stdio with any MCP host (Claude Desktop, Claude
     Code, OpenClaw, etc.). Process lifecycle is the host's responsibility.

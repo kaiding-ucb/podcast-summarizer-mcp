@@ -4,7 +4,7 @@ How to spin up an isolated OpenClaw instance, load this MCP, and try it
 out with natural-language queries — without touching your existing
 OpenClaw setups (finance / career / etc.).
 
-The test profile lives at `~/.openclaw-video-summarizer-test/` and is
+The test profile lives at `~/.openclaw-podcast-summarizer-test/` and is
 fully separate from `~/.openclaw/` and `~/.openclaw-career/`.
 
 ---
@@ -12,7 +12,7 @@ fully separate from `~/.openclaw/` and `~/.openclaw-career/`.
 ## 0. One-time setup (~3 minutes)
 
 ```bash
-cd /Users/kai/Documents/test/video-summarizer-mcp
+cd /Users/kai/Documents/test/podcast-summarizer-mcp
 
 # Create venv + install deps
 python3 -m venv .venv
@@ -35,11 +35,11 @@ nvm use 22 && npm install -g openclaw
 .venv/bin/python tests/openclaw/setup_profile.py --reset
 ```
 
-This creates everything fresh at `~/.openclaw-video-summarizer-test/`,
+This creates everything fresh at `~/.openclaw-podcast-summarizer-test/`,
 completely separate from your other OpenClaw instances. The script:
 
 - Writes `openclaw.json` (gateway port 19002, single `testbot` agent,
-  only the video-summarizer MCP, Gemini Flash as the model).
+  only the podcast-summarizer MCP, Gemini Flash as the model).
 - Reads your Gemini key from `~/.config/video-analysis/video-analysis.env`.
 - Writes `AGENTS.md` + `SOUL.md` + `IDENTITY.md` in the workspace —
   defines the agent's persona and behavior rules.
@@ -52,15 +52,15 @@ To start over from a clean slate at any point, re-run with `--reset`.
 ## 2. Verify the profile registered correctly
 
 ```bash
-openclaw --profile video-summarizer-test agents list
+openclaw --profile podcast-summarizer-test agents list
 ```
 
 Expected output:
 ```
 Agents:
 - testbot (default)
-  Identity: 🎬 Video Summarizer Test Agent (config)
-  Workspace: ~/.openclaw-video-summarizer-test/workspace-test
+  Identity: 🎬 Podcast Summarizer Test Agent (config)
+  Workspace: ~/.openclaw-podcast-summarizer-test/workspace-test
   ...
 ```
 
@@ -70,7 +70,7 @@ Agents:
 
 ```bash
 GEMINI_API_KEY=$(grep ^GEMINI_API_KEY ~/.config/video-analysis/video-analysis.env | cut -d= -f2-) \
-  openclaw --profile video-summarizer-test chat --local
+  openclaw --profile podcast-summarizer-test chat --local
 ```
 
 That's it. You'll get an interactive terminal UI bound to the test
@@ -129,10 +129,10 @@ Open a second terminal (any time, doesn't disrupt the TUI):
 
 ```bash
 # What's in the registry right now
-cat ~/.openclaw-video-summarizer-test/channels.json | python3 -m json.tool
+cat ~/.openclaw-podcast-summarizer-test/channels.json | python3 -m json.tool
 
 # Per-channel last-seen video state (after discover_new_videos calls)
-cat ~/.openclaw-video-summarizer-test/video-state.json | python3 -m json.tool
+cat ~/.openclaw-podcast-summarizer-test/video-state.json | python3 -m json.tool
 ```
 
 ---
@@ -148,9 +148,9 @@ For other content types, override:
 
 **Host-wide (env var, persistent across all calls):**
 ```bash
-export VIDEO_ANALYSIS_PROMPT_PATH=/Users/kai/Documents/test/video-summarizer-mcp/prompts/technical-talk.md
+export VIDEO_ANALYSIS_PROMPT_PATH=/Users/kai/Documents/test/podcast-summarizer-mcp/prompts/technical-talk.md
 .venv/bin/python tests/openclaw/setup_profile.py --reset   # picks up new env var
-openclaw --profile video-summarizer-test chat --local
+openclaw --profile podcast-summarizer-test chat --local
 ```
 
 The MCP re-reads the file on every analysis call — edit the file and
@@ -227,7 +227,7 @@ helper pattern:
 **Terminal 1** — start the gateway (long-running):
 ```bash
 GEMINI_API_KEY=$(grep ^GEMINI_API_KEY ~/.config/video-analysis/video-analysis.env | cut -d= -f2-) \
-  openclaw --profile video-summarizer-test gateway --auth none --force
+  openclaw --profile podcast-summarizer-test gateway --auth none --force
 ```
 
 **Terminal 2** — fire queries:
@@ -236,7 +236,7 @@ export GEMINI_API_KEY=$(grep ^GEMINI_API_KEY ~/.config/video-analysis/video-anal
 
 ask() {
   local sid="manual_$(date +%s)_$$"
-  openclaw --profile video-summarizer-test agent \
+  openclaw --profile podcast-summarizer-test agent \
     --agent testbot --session-id "$sid" --json -m "$1" \
     | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('result',d).get('meta',{}).get('finalAssistantVisibleText','(no text)'))"
 }
@@ -258,9 +258,9 @@ This is what the automated tests in `tests/openclaw/` use under the hood.
 | Symptom | Cause | Fix |
 |---|---|---|
 | TUI doesn't seem to call any tools | LLM mood; you may have hit a Flash refusal | Quit, restart TUI (fresh session), retry with a more explicit message |
-| `Address already in use` on port 19002 | Old gateway / old TUI still running | `pkill -f "openclaw.*video-summarizer-test"` |
+| `Address already in use` on port 19002 | Old gateway / old TUI still running | `pkill -f "openclaw.*podcast-summarizer-test"` |
 | `API key expired` from Gemini | Local key rotated | Refresh `~/.config/video-analysis/video-analysis.env`, then re-run `setup_profile.py --reset` |
-| Agent picks a channel for a vague query without asking | LLM mood — SOUL.md is hardened against this but Flash varies | Quit + restart TUI; or escalate to `gemini-3.1-pro-preview` in `~/.openclaw-video-summarizer-test/openclaw.json` for stricter rule-following |
+| Agent picks a channel for a vague query without asking | LLM mood — SOUL.md is hardened against this but Flash varies | Quit + restart TUI; or escalate to `gemini-3.1-pro-preview` in `~/.openclaw-podcast-summarizer-test/openclaw.json` for stricter rule-following |
 | Agent says "already tracked" when you know the registry is empty | TUI session memory bleeding (you added it earlier in the same TUI session) | Quit and re-launch the TUI for a fresh session; or run `setup_profile.py --reset` to wipe the registry on disk |
 
 ---
@@ -268,11 +268,11 @@ This is what the automated tests in `tests/openclaw/` use under the hood.
 ## Cleanup when done
 
 ```bash
-pkill -f "openclaw.*video-summarizer-test"   # stop gateway
-rm -rf ~/.openclaw-video-summarizer-test     # wipe profile entirely
+pkill -f "openclaw.*podcast-summarizer-test"   # stop gateway
+rm -rf ~/.openclaw-podcast-summarizer-test     # wipe profile entirely
 ```
 
-The MCP repo at `/Users/kai/Documents/test/video-summarizer-mcp/` and
+The MCP repo at `/Users/kai/Documents/test/podcast-summarizer-mcp/` and
 your other OpenClaw instances are untouched.
 
 ---
@@ -280,7 +280,7 @@ your other OpenClaw instances are untouched.
 ## Where things live
 
 ```
-~/.openclaw-video-summarizer-test/
+~/.openclaw-podcast-summarizer-test/
 ├── openclaw.json               # profile config (gateway port, MCP entry, model)
 ├── channels.json               # registry — edited by add/remove_tracked_channel
 ├── video-state.json            # per-channel last-seen video id (discover state)
@@ -292,4 +292,4 @@ your other OpenClaw instances are untouched.
     └── IDENTITY.md             # name + emoji
 ```
 
-Repo: <https://github.com/kaiding-ucb/video-summarizer-mcp> (private)
+Repo: <https://github.com/kaiding-ucb/podcast-summarizer-mcp> (private)

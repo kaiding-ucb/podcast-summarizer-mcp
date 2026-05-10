@@ -20,7 +20,7 @@ from xml.etree import ElementTree as ET
 
 _FEED_URL = "https://www.youtube.com/feeds/videos.xml?channel_id={cid}"
 _CHANNEL_ID_RE = re.compile(r"^UC[A-Za-z0-9_-]{20,24}$")
-_USER_AGENT = "video-summarizer-mcp/0.2 (+https://github.com/)"
+_USER_AGENT = "podcast-summarizer-mcp/0.2 (+https://github.com/)"
 
 _NS = {
     "atom": "http://www.w3.org/2005/Atom",

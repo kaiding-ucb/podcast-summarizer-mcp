@@ -1,4 +1,4 @@
-# video-summarizer-mcp
+# podcast-summarizer-mcp
 
 An MCP (Model Context Protocol) server that lets your AI assistant
 discover, track, and summarize YouTube videos in natural language.
@@ -27,12 +27,12 @@ You need Python 3.10+ and a Gemini API key (free) from
 ### 1. Install from source
 
 ```bash
-git clone https://github.com/kaiding-ucb/video-summarizer-mcp
-cd video-summarizer-mcp
+git clone https://github.com/kaiding-ucb/podcast-summarizer-mcp
+cd podcast-summarizer-mcp
 python3 -m venv .venv && .venv/bin/pip install -e .
 
 # Note the absolute path — you'll paste it into your host config below.
-echo "$(pwd)/.venv/bin/video-summarizer-mcp"
+echo "$(pwd)/.venv/bin/podcast-summarizer-mcp"
 ```
 
 ### 2. Configure ONE host
@@ -46,7 +46,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 ```json
 {
   "mcpServers": {
-    "video-summarizer": {
+    "podcast-summarizer": {
       "command": "/ABSOLUTE/PATH",
       "env": { "GEMINI_API_KEY": "AIza..." }
     }
@@ -54,21 +54,21 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 }
 ```
 Quit Claude Desktop fully (⌘Q) and reopen. Click the 🔌 icon —
-`video-summarizer` should be listed.
+`podcast-summarizer` should be listed.
 
 #### Claude Code
 ```bash
-claude mcp add video-summarizer \
+claude mcp add podcast-summarizer \
   --env GEMINI_API_KEY=AIza... \
   -- /ABSOLUTE/PATH
 
-claude mcp list   # should show video-summarizer
+claude mcp list   # should show podcast-summarizer
 ```
 
 #### OpenClaw
 Add to `~/.openclaw/openclaw.json` under `mcp.servers`:
 ```json
-"video-summarizer": {
+"podcast-summarizer": {
   "command": "/ABSOLUTE/PATH",
   "env": { "GEMINI_API_KEY": "AIza..." }
 }
@@ -84,7 +84,7 @@ In your host's chat, ask:
 Then verify it actually wrote to disk:
 
 ```bash
-cat ~/.video-summarizer-mcp/channels.json
+cat ~/.podcast-summarizer-mcp/channels.json
 ```
 
 You should see one entry whose `channel_id` starts with `UC` and `name`
@@ -102,7 +102,7 @@ poll for completion, and return a structured summary with timestamps.
 ### Reset state if needed
 
 ```bash
-rm -rf ~/.video-summarizer-mcp/   # wipes channel registry + per-channel state
+rm -rf ~/.podcast-summarizer-mcp/   # wipes channel registry + per-channel state
 ```
 
 ---
@@ -118,24 +118,24 @@ Then install the server:
 
 ```bash
 # Recommended: uvx (no virtualenv management, works on Mac/Linux/Windows)
-uvx install video-summarizer-mcp
+uvx install podcast-summarizer-mcp
 
 # Or pipx
-pipx install video-summarizer-mcp
+pipx install podcast-summarizer-mcp
 
 # Or pip into a venv of your choice
-pip install video-summarizer-mcp
+pip install podcast-summarizer-mcp
 ```
 
-This puts a `video-summarizer-mcp` binary on your PATH. That's the
+This puts a `podcast-summarizer-mcp` binary on your PATH. That's the
 command your MCP host will run.
 
 > **Until the package lands on PyPI**, install from source:
 > ```bash
-> git clone https://github.com/kaiding-ucb/video-summarizer-mcp
-> cd video-summarizer-mcp
+> git clone https://github.com/kaiding-ucb/podcast-summarizer-mcp
+> cd podcast-summarizer-mcp
 > python3 -m venv .venv && .venv/bin/pip install -e .
-> # Point your MCP host at /full/path/to/video-summarizer-mcp/.venv/bin/video-summarizer-mcp
+> # Point your MCP host at /full/path/to/podcast-summarizer-mcp/.venv/bin/podcast-summarizer-mcp
 > ```
 
 ---
@@ -150,8 +150,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 ```json
 {
   "mcpServers": {
-    "video-summarizer": {
-      "command": "video-summarizer-mcp",
+    "podcast-summarizer": {
+      "command": "podcast-summarizer-mcp",
       "env": {
         "GEMINI_API_KEY": "AIza..."
       }
@@ -167,9 +167,9 @@ now ask Claude to "add Forward Guidance to my channels" or
 ### Claude Code
 
 ```bash
-claude mcp add video-summarizer \
+claude mcp add podcast-summarizer \
   --env GEMINI_API_KEY=AIza... \
-  -- video-summarizer-mcp
+  -- podcast-summarizer-mcp
 ```
 
 Or drop a `.mcp.json` at the root of any Claude Code project:
@@ -177,8 +177,8 @@ Or drop a `.mcp.json` at the root of any Claude Code project:
 ```json
 {
   "mcpServers": {
-    "video-summarizer": {
-      "command": "video-summarizer-mcp",
+    "podcast-summarizer": {
+      "command": "podcast-summarizer-mcp",
       "env": { "GEMINI_API_KEY": "AIza..." }
     }
   }
@@ -193,8 +193,8 @@ Edit `~/.openclaw/openclaw.json` and add the server entry:
 {
   "mcp": {
     "servers": {
-      "video-summarizer": {
-        "command": "video-summarizer-mcp",
+      "podcast-summarizer": {
+        "command": "podcast-summarizer-mcp",
         "env": { "GEMINI_API_KEY": "AIza..." }
       }
     }
@@ -238,10 +238,10 @@ All optional — set in the host's `env` block.
 | Variable | Default | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | (**required**) | Your Gemini API key |
-| `VIDEO_ANALYSIS_CHANNELS_PATH` | `~/.video-summarizer-mcp/channels.json` | Tracked-channel registry |
-| `VIDEO_ANALYSIS_STATE_PATH` | `~/.video-summarizer-mcp/video-state.json` | Per-channel last-seen video |
-| `VIDEO_ANALYSIS_JOBS_PATH` | `~/.video-summarizer-mcp/jobs.json` | Async analysis job store |
-| `VIDEO_ANALYSIS_BATCH_METADATA_PATH` | `~/.video-summarizer-mcp/batches.json` | Batch-job metadata cache |
+| `VIDEO_ANALYSIS_CHANNELS_PATH` | `~/.podcast-summarizer-mcp/channels.json` | Tracked-channel registry |
+| `VIDEO_ANALYSIS_STATE_PATH` | `~/.podcast-summarizer-mcp/video-state.json` | Per-channel last-seen video |
+| `VIDEO_ANALYSIS_JOBS_PATH` | `~/.podcast-summarizer-mcp/jobs.json` | Async analysis job store |
+| `VIDEO_ANALYSIS_BATCH_METADATA_PATH` | `~/.podcast-summarizer-mcp/batches.json` | Batch-job metadata cache |
 | `VIDEO_ANALYSIS_PROMPT_PATH` | (uses built-in default) | Path to a custom analysis prompt |
 
 ### Customizing the analysis prompt
@@ -289,8 +289,8 @@ varies. From our testing:
 ## Development
 
 ```bash
-git clone https://github.com/kaiding-ucb/video-summarizer-mcp
-cd video-summarizer-mcp
+git clone https://github.com/kaiding-ucb/podcast-summarizer-mcp
+cd podcast-summarizer-mcp
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 

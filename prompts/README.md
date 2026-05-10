@@ -4,7 +4,7 @@ Each `.md` file here is a complete analysis prompt you can point the
 MCP at via:
 
 ```bash
-export VIDEO_ANALYSIS_PROMPT_PATH=/path/to/video-summarizer-mcp/prompts/<file>.md
+export VIDEO_ANALYSIS_PROMPT_PATH=/path/to/podcast-summarizer-mcp/prompts/<file>.md
 ```
 
 (Or pass `prompt=...` to `analyze_video_start` / `analyze_videos_batch_start`

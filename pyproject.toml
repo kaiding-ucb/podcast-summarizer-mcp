@@ -1,5 +1,5 @@
 [project]
-name = "video-summarizer-mcp"
+name = "podcast-summarizer-mcp"
 version = "0.3.0"
 description = "MCP server for natural-language YouTube channel discovery + Gemini-powered video summaries. Zero YouTube API key required."
 readme = "README.md"
@@ -21,14 +21,14 @@ dev = [
 ]
 
 [project.scripts]
-# Installs as `video-summarizer-mcp` on PATH after `pip install` / `uvx install`.
+# Installs as `podcast-summarizer-mcp` on PATH after `pip install` / `uvx install`.
 # This is what MCP host configs (Claude Desktop, Claude Code, OpenClaw) point at.
-video-summarizer-mcp = "server:main"
+podcast-summarizer-mcp = "server:main"
 
 [project.urls]
-Homepage = "https://github.com/kaiding-ucb/video-summarizer-mcp"
-Repository = "https://github.com/kaiding-ucb/video-summarizer-mcp"
-Issues = "https://github.com/kaiding-ucb/video-summarizer-mcp/issues"
+Homepage = "https://github.com/kaiding-ucb/podcast-summarizer-mcp"
+Repository = "https://github.com/kaiding-ucb/podcast-summarizer-mcp"
+Issues = "https://github.com/kaiding-ucb/podcast-summarizer-mcp/issues"
 
 [build-system]
 requires = ["hatchling"]

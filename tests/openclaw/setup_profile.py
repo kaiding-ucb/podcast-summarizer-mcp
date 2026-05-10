@@ -1,7 +1,7 @@
 """Bootstrap the isolated OpenClaw profile used for E2E tests.
 
 Idempotent — safe to re-run to reset state. Resets:
-  - profile config at ~/.openclaw-video-summarizer-test/openclaw.json
+  - profile config at ~/.openclaw-podcast-summarizer-test/openclaw.json
   - workspace SOUL.md
   - per-test state files (channels.json, video-state.json)
 
@@ -23,7 +23,7 @@ import shutil
 import sys
 from pathlib import Path
 
-PROFILE_NAME = "video-summarizer-test"
+PROFILE_NAME = "podcast-summarizer-test"
 HOME = Path.home()
 PROFILE_DIR = HOME / f".openclaw-{PROFILE_NAME}"
 WORKSPACE_DIR = PROFILE_DIR / "workspace-test"
@@ -45,9 +45,9 @@ GATEWAY_PORT = 19002
 
 
 SOUL = """\
-# Test Agent — video-summarizer
+# Test Agent — podcast-summarizer
 
-You exist to drive the video-summarizer-mcp tools.
+You exist to drive the podcast-summarizer-mcp tools.
 
 ## Hard rules — never violate
 
@@ -145,13 +145,13 @@ def build_config(gemini_key: str) -> dict:
                     "id": "testbot",
                     "name": "testbot",
                     "workspace": str(WORKSPACE_DIR),
-                    "identity": {"name": "Video Summarizer Test Agent", "emoji": "🎬"},
+                    "identity": {"name": "Podcast Summarizer Test Agent", "emoji": "🎬"},
                 }
             ],
         },
         "mcp": {
             "servers": {
-                "video-summarizer": {
+                "podcast-summarizer": {
                     "command": str(START_SCRIPT),
                     "args": [],
                     "env": {
@@ -186,8 +186,8 @@ def main() -> None:
     AGENTS_PATH.write_text(SOUL)
     SOUL_PATH.write_text(SOUL)
     IDENTITY_PATH.write_text(
-        "# Identity\n\nName: Video Summarizer Test Agent\nEmoji: 🎬\n"
-        "Purpose: drive the video-summarizer-mcp tools end-to-end.\n"
+        "# Identity\n\nName: Podcast Summarizer Test Agent\nEmoji: 🎬\n"
+        "Purpose: drive the podcast-summarizer-mcp tools end-to-end.\n"
     )
 
     if args.reset:

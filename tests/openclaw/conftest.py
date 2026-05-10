@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 
-PROFILE_NAME = "video-summarizer-test"
+PROFILE_NAME = "podcast-summarizer-test"
 GATEWAY_PORT = 19002
 HOME = Path.home()
 PROFILE_DIR = HOME / f".openclaw-{PROFILE_NAME}"
@@ -201,7 +201,7 @@ class AgentResponse:
             "get_video_info",
             "get_state",
         ]:
-            # Look for "name":"video-summarizer__<tool>" pattern (used in
+            # Look for "name":"podcast-summarizer__<tool>" pattern (used in
             # systemPromptReport.tools list — but that's the registry of
             # available tools, not necessarily called). To detect actual
             # invocations we'd need stricter parsing; for now we surface
