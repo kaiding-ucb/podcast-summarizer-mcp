@@ -7,6 +7,9 @@ from typing import Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
+from tools import channel_search
+from tools.channel_registry import ChannelRegistry
+from tools.discovery import DiscoveryClient
 from tools.gemini_client import GeminiClient
 from tools.jobs import store as jobs_store, start_heartbeat_monitor, _now_iso
 from tools.models import (
@@ -18,31 +21,39 @@ from tools.models import (
     VideoInfo,
 )
 from tools.state import StateStore
-from tools.youtube_client import YouTubeClient
-from mcp_idle_watchdog import install_idle_watchdog, track_request
 
-mcp = FastMCP("Video Analysis")
+mcp = FastMCP("Podcast Summarizer")
 
-YOUTUBE_KEY = os.environ["YOUTUBE_API_KEY"]
 GEMINI_KEY = os.environ["GEMINI_API_KEY"]
 STATE_PATH = os.environ.get(
     "VIDEO_ANALYSIS_STATE_PATH",
-    os.path.expanduser("~/.openclaw/video-analysis-state.json"),
+    os.path.expanduser("~/.podcast-summarizer-mcp/video-state.json"),
+)
+CHANNELS_PATH = os.environ.get(
+    "VIDEO_ANALYSIS_CHANNELS_PATH",
+    os.path.expanduser("~/.podcast-summarizer-mcp/channels.json"),
 )
 
-_yt = YouTubeClient(YOUTUBE_KEY)
+_yt = DiscoveryClient()
 _gm = GeminiClient(GEMINI_KEY)
 _state = StateStore(STATE_PATH)
+_channels = ChannelRegistry(CHANNELS_PATH)
 
 
 @mcp.tool()
-@track_request
 def discover_new_videos(
-    channel_ids: List[str],
+    channel_ids: Optional[List[str]] = None,
+    tag: Optional[str] = None,
     max_per_channel: int = 5,
     min_duration_seconds: int = 600,
 ) -> dict:
     """Discover new videos from YouTube channels since the last time this MCP saw them.
+
+    Two modes for selecting channels:
+      1. Pass `channel_ids` explicitly (legacy behavior).
+      2. Omit `channel_ids` and the MCP reads from its tracked-channel registry
+         (managed by add_tracked_channel / remove_tracked_channel). Use `tag` to
+         filter the registry — e.g. tag="macro" returns only channels tagged macro.
 
     State is tracked per channel in a server-managed JSON file. On the FIRST call for a
     channel, the most recent video is returned (and state is seeded) so the caller has
@@ -54,7 +65,8 @@ def discover_new_videos(
       - Videos older than or equal to the last-seen video are skipped
 
     Args:
-      channel_ids: YouTube channel IDs (e.g. "UCkrwgzhIBKccuDsi_SvZtnQ")
+      channel_ids: Optional list of YouTube channel IDs. If omitted, the registry is used.
+      tag: Optional tag filter for registry-based mode (ignored if channel_ids given).
       max_per_channel: How many recent uploads to inspect per channel (default 5)
       min_duration_seconds: Minimum video length to include (default 600 = 10min)
 
@@ -65,6 +77,9 @@ def discover_new_videos(
     new_videos: List[VideoInfo] = []
     skipped: List[SkippedVideo] = []
     first_run: List[str] = []
+
+    if channel_ids is None:
+        channel_ids = _channels.get_channel_ids(tag=tag)
 
     for cid in channel_ids:
         last_seen = _state.get_last_video_id(cid)
@@ -115,7 +130,12 @@ def discover_new_videos(
     ).model_dump()
 
 
-def _run_analysis(job_id: str, video_url: str, max_retries: int) -> None:
+def _run_analysis(
+    job_id: str,
+    video_url: str,
+    max_retries: int,
+    prompt: Optional[str] = None,
+) -> None:
     """Background worker: metadata lookup + Gemini analysis, writes to jobs_store.
 
     A sibling heartbeat-monitor thread writes `last_heartbeat_at` every
@@ -140,6 +160,7 @@ def _run_analysis(job_id: str, video_url: str, max_retries: int) -> None:
             video_id=info["video_id"],
             video_duration=info["duration"],
             max_retries=max_retries,
+            prompt=prompt,
         )
         payload = AnalysisResult(**result).model_dump()
         if payload.get("success"):
@@ -171,13 +192,29 @@ def _run_analysis(job_id: str, video_url: str, max_retries: int) -> None:
 
 
 @mcp.tool()
-@track_request
-def analyze_video_start(video_url: str, max_retries: int = 3) -> dict:
+def analyze_video_start(
+    video_url: str,
+    max_retries: int = 3,
+    prompt: Optional[str] = None,
+) -> dict:
     """Launch Gemini video analysis as a background job. Returns in <1s with a job_id.
 
-    Podcast-length videos take Gemini 3-15 min to analyze, which exceeds openclaw's
-    60s MCP request timeout. This tool spawns a background thread and returns
-    immediately; poll `analyze_video_result(job_id)` to get the finished analysis.
+    **This is the default for both single-video and multi-video requests.**
+    For multiple videos, fire this tool N times back-to-back (each call
+    returns in <1s with its own job_id) — the analyses run concurrently
+    in background threads, so wall-clock time is bounded by the slowest
+    single video (~3-10 min), NOT N × per-video time. Then poll
+    `analyze_video_result(job_id)` for each job_id.
+
+    Use `analyze_videos_batch_start` ONLY when the user explicitly says
+    "no rush", "overnight", or for scheduled / cron digests where minutes-
+    to-hours latency is acceptable in exchange for 50% cost savings.
+
+    Podcast-length videos take Gemini 3-15 min to analyze, which exceeds typical
+    MCP host request timeouts (Claude Desktop, Claude Code, OpenClaw all cap
+    individual tool calls at ~60s). This tool spawns a background thread and
+    returns immediately; poll `analyze_video_result(job_id)` to get the
+    finished analysis.
 
     Does NOT update discovery state. Caller is responsible for calling
     discover_new_videos (which manages state) beforehand.
@@ -185,6 +222,11 @@ def analyze_video_start(video_url: str, max_retries: int = 3) -> dict:
     Args:
       video_url: Full YouTube URL (https://www.youtube.com/watch?v=...)
       max_retries: How many Gemini retries on empty/short output (default 3)
+      prompt: Optional override for the analysis prompt. If None, the
+        default ships with an investment-podcast persona — set
+        $VIDEO_ANALYSIS_PROMPT_PATH to change the host-wide default,
+        or pass `prompt` here for a one-off override (e.g. "summarize
+        this technical talk in 5 bullets").
 
     Returns:
       { job_id, video_url, status: "pending" }
@@ -192,7 +234,7 @@ def analyze_video_start(video_url: str, max_retries: int = 3) -> dict:
     job_id = jobs_store.create(video_url)
     threading.Thread(
         target=_run_analysis,
-        args=(job_id, video_url, max_retries),
+        args=(job_id, video_url, max_retries, prompt),
         daemon=True,
         name=f"analyze-{job_id[:8]}",
     ).start()
@@ -205,15 +247,13 @@ def analyze_video_start(video_url: str, max_retries: int = 3) -> dict:
 
 
 @mcp.tool()
-@track_request
 def analyze_video_result(job_id: str, wait_seconds: int = 10) -> dict:
     """Poll for an analyze_video_start result. Blocks up to wait_seconds for a state change.
 
-    Default wait_seconds=10 was lowered from 45 for symmetry with x-search's
-    search_x_result after a 2026-04-22 heartbeat where a blocking 45s wait
-    exceeded openclaw's 60s MCP-client cap under concurrent load. Smaller
-    blocking window = guaranteed return well under 60s at the cost of more
-    poll round-trips (cheap).
+    Default wait_seconds=10 keeps the blocking window well under the typical
+    60s MCP request timeout enforced by hosts. Smaller blocking window =
+    guaranteed return well under 60s at the cost of more poll round-trips
+    (cheap, ~1KB per poll).
 
     Recommended pattern: call with wait_seconds=10 each poll. Cap total
     polling at ~90 iterations (~15 min) — most podcasts finish within 3-5 min.
@@ -244,7 +284,7 @@ def analyze_video_result(job_id: str, wait_seconds: int = 10) -> dict:
 
 _BATCH_METADATA_PATH = os.environ.get(
     "VIDEO_ANALYSIS_BATCH_METADATA_PATH",
-    os.path.expanduser("~/.openclaw/video-analysis-batches.json"),
+    os.path.expanduser("~/.podcast-summarizer-mcp/batches.json"),
 )
 _batch_meta_lock = threading.Lock()
 
@@ -268,16 +308,25 @@ def _save_batch_metadata(data: Dict[str, dict]) -> None:
 
 
 @mcp.tool()
-@track_request
-def analyze_videos_batch_start(video_urls: List[str]) -> dict:
+def analyze_videos_batch_start(
+    video_urls: List[str],
+    prompt: Optional[str] = None,
+) -> dict:
     """Submit a batch of YouTube videos to Gemini Batch API for async analysis.
 
-    Batch processing is 50% cheaper than `analyze_video_start` and typically
-    completes within minutes (24h SLA max). Use this for daily cron digests
-    where you have multiple videos to analyze at once.
+    **Use this ONLY when the user explicitly says "no rush", "overnight",
+    "do it later", or for scheduled cron digests.** Batch is 50% cheaper
+    than `analyze_video_start` but the wall-clock SLA is up to 24 hours
+    (typically 15-60 min). For interactive requests — even multi-video
+    ones like "summarize today's new videos" — prefer `analyze_video_start`
+    fired N times in parallel (~5-10 min wall-clock for any N).
 
     Args:
       video_urls: List of full YouTube URLs (https://www.youtube.com/watch?v=...)
+      prompt: Optional override for the analysis prompt. If None, the
+        default ships with an investment-podcast persona — set
+        $VIDEO_ANALYSIS_PROMPT_PATH to change the host-wide default,
+        or pass `prompt` here for a per-batch override.
 
     Returns:
       { batch_job_name, video_count, video_urls, status: "pending",
@@ -307,7 +356,9 @@ def analyze_videos_batch_start(video_urls: List[str]) -> dict:
     if not entries:
         return {"error": "no valid videos to analyze", "skipped": skipped}
 
-    batch_job_name = _gm.submit_batch(entries, display_name="video-analysis-batch")
+    batch_job_name = _gm.submit_batch(
+        entries, display_name="video-analysis-batch", prompt=prompt
+    )
 
     with _batch_meta_lock:
         all_meta = _load_batch_metadata()
@@ -327,7 +378,6 @@ def analyze_videos_batch_start(video_urls: List[str]) -> dict:
 
 
 @mcp.tool()
-@track_request
 def analyze_videos_batch_result(batch_job_name: str) -> dict:
     """Poll the Gemini Batch API once; if done, return per-video results.
 
@@ -372,7 +422,6 @@ def analyze_videos_batch_result(batch_job_name: str) -> dict:
 
 
 @mcp.tool()
-@track_request
 def get_video_info(video_url: str, min_duration_seconds: int = 600) -> dict:
     """Cheap metadata-only lookup for a single YouTube video (1 YouTube API unit).
 
@@ -390,7 +439,6 @@ def get_video_info(video_url: str, min_duration_seconds: int = 600) -> dict:
 
 
 @mcp.tool()
-@track_request
 def get_state(channel_ids: Optional[List[str]] = None) -> dict:
     """Read-only view of the discovery state file.
 
@@ -405,18 +453,227 @@ def get_state(channel_ids: Optional[List[str]] = None) -> dict:
     return StateSnapshot(channels=[ChannelState(**r) for r in rows]).model_dump()
 
 
-if __name__ == "__main__":
-    install_idle_watchdog(
-        server_name="video-analysis",
-        # idle-exit disabled: holds no constrained external resource (HTTPS
-        # to Gemini + YouTube, no persistent handle). Analysis runs in
-        # background threads that the per-request tracker doesn't see, so
-        # any idle-exit would orphan in-flight jobs. Keep the process alive
-        # across long idle gaps to avoid the stale-transport trap.
-        idle_timeout_seconds=0,
-        # request_max applies only to synchronous tool calls (discover,
-        # start, result, get_video_info, get_state) — all fast. Keep a
-        # modest guard so a hung MCP request can't permanently wedge it.
-        request_max_seconds=120,
-    )
+# ---------- Channel discovery (no-key YouTube search) ----------
+
+
+@mcp.tool()
+def search_youtube_channels(query: str, max_results: int = 5) -> dict:
+    """Search YouTube for channels matching a free-text query.
+
+    Use this when the user names a channel ("Forward Guidance", "All-In podcast")
+    or describes one ("a good macro investing channel") and you need to identify
+    candidate channels before adding to the registry.
+
+    No YouTube API key required — uses yt-dlp scraping under the hood.
+
+    Args:
+      query: Free-text search term, e.g. "Forward Guidance" or "macro investing".
+      max_results: How many distinct channels to return, ranked by relevance (default 5).
+
+    Returns:
+      { "candidates": [
+          { "channel_id", "name", "channel_url", "hit_count",
+            "confidence_score" },
+          ...
+        ] }
+      Empty list if nothing matches. Subscriber count + recent videos are NOT
+      populated here — call get_channel_metadata(channel_id) for that.
+    """
+    candidates = channel_search.search_youtube_channels(query, max_results=max_results)
+    return {"candidates": candidates, "query": query}
+
+
+@mcp.tool()
+def resolve_youtube_channel(handle_or_url: str) -> dict:
+    """Resolve a YouTube handle (@name) or channel URL to channel metadata.
+
+    Use this when the user gives an exact handle or URL — skips the search step.
+    Returns None / error for video URLs, free-text strings, or channels that
+    can't be loaded.
+
+    Args:
+      handle_or_url: e.g. "@ForwardGuidance" or
+                    "https://www.youtube.com/@ForwardGuidance" or
+                    "https://www.youtube.com/channel/UCxxxxx".
+
+    Returns:
+      { channel_id, name, handle, description, subscriber_count,
+        channel_url, recent_video_titles } on success.
+      { "error": "..." } on failure.
+    """
+    info = channel_search.resolve_youtube_channel(handle_or_url)
+    if info is None:
+        return {"error": "could not resolve channel", "input": handle_or_url}
+    return info
+
+
+@mcp.tool()
+def get_channel_metadata(channel_id: str) -> dict:
+    """Fetch full metadata for a known channel_id.
+
+    Use after search_youtube_channels to enrich a candidate with subscriber
+    count, description, and recent video titles before presenting to the user.
+
+    Args:
+      channel_id: YouTube channel ID (must start with "UC").
+
+    Returns:
+      { channel_id, name, handle, description, subscriber_count,
+        channel_url, recent_video_titles }.
+    """
+    try:
+        return channel_search.get_channel_metadata(channel_id)
+    except ValueError as e:
+        return {"error": str(e), "channel_id": channel_id}
+
+
+# ---------- Tracked-channel registry (MCP-owned state) ----------
+
+
+@mcp.tool()
+def add_tracked_channel(
+    channel_id: str,
+    name: str,
+    handle: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+) -> dict:
+    """Add a channel to the registry. **You MUST call this tool to add a
+    channel — claiming "I've added X" without invoking it leaves the
+    user's registry empty and the user has no way to know until they
+    next ask "what am I tracking" and discover the missing channels.**
+
+    Idempotent: re-adding the same channel_id updates name/handle/tags but
+    preserves the original added_at timestamp. Tags are arbitrary strings —
+    use them to group channels (e.g. ["macro"], ["semis", "podcast"]).
+
+    Args:
+      channel_id: YouTube channel ID, must start with "UC".
+      name: Display name (the user-friendly label).
+      handle: Optional "@handle" (cosmetic, helps users identify the channel).
+      tags: Optional list of grouping strings (default empty).
+
+    Returns:
+      { added: true,
+        channel: {channel_id, name, handle, tags, added_at},
+        registry_total: <int>,
+        registry_now_contains: [name, name, ...],   # alphabetical
+        user_facing_message: "Added X. Registry now has N channels: ..." }
+      Use `user_facing_message` verbatim when telling the user the result —
+      it carries the freshly-verified state and prevents misreporting.
+    """
+    try:
+        result = _channels.add(
+            channel_id=channel_id, name=name, handle=handle, tags=tags or []
+        )
+    except ValueError as e:
+        return {"error": str(e), "channel_id": channel_id}
+    record = result["record"]
+    total = result["total_count"]
+    names = result["all_names"]
+    return {
+        "added": True,
+        "channel": {"channel_id": channel_id, **record},
+        "registry_total": total,
+        "registry_now_contains": names,
+        "user_facing_message": (
+            f"Added {name} ({handle or channel_id}). "
+            f"Registry now has {total} channel{'s' if total != 1 else ''}: "
+            f"{', '.join(names)}."
+        ),
+    }
+
+
+@mcp.tool()
+def remove_tracked_channel(channel_id: str) -> dict:
+    """Remove a channel from the registry. **You MUST call this tool to
+    remove — claiming "I've removed X" without invoking it leaves the
+    channel still tracked and produces silently wrong state.**
+
+    No-op (returns removed=false) if the channel_id wasn't tracked.
+    Does NOT clear the per-channel last-seen state, so re-adding later
+    won't re-ingest the backlog.
+
+    Args:
+      channel_id: YouTube channel ID.
+
+    Returns:
+      { removed: true|false,
+        channel_id,
+        registry_total: <int>,
+        registry_now_contains: [name, name, ...],
+        user_facing_message: "Removed X. Registry now has N channels: ..." }
+      Use `user_facing_message` verbatim when reporting back to the user.
+    """
+    result = _channels.remove(channel_id)
+    removed = result["removed"]
+    total = result["total_count"]
+    names = result["all_names"]
+    if removed:
+        msg = (
+            f"Removed channel {channel_id}. "
+            f"Registry now has {total} channel{'s' if total != 1 else ''}"
+            + (f": {', '.join(names)}." if names else ".")
+        )
+    else:
+        msg = (
+            f"No change — {channel_id} was not in the registry. "
+            f"Registry still has {total} channel{'s' if total != 1 else ''}"
+            + (f": {', '.join(names)}." if names else ".")
+        )
+    return {
+        "removed": removed,
+        "channel_id": channel_id,
+        "registry_total": total,
+        "registry_now_contains": names,
+        "user_facing_message": msg,
+    }
+
+
+@mcp.tool()
+def list_tracked_channels(tag: Optional[str] = None) -> dict:
+    """List all channels currently in the registry. **Always call this
+    tool when the user asks "what am I tracking" or similar — never
+    answer from memory or prior conversation context, since the
+    registry can be mutated by other clients between turns.**
+
+    Args:
+      tag: If provided, return only channels carrying this tag.
+
+    Returns:
+      { channels: [{channel_id, name, handle, tags, added_at}, ...],
+        count, tag,
+        user_facing_message: "Tracking N channels: ..." or "No channels tracked." }
+      Use `user_facing_message` verbatim when reporting back.
+    """
+    channels = _channels.list_channels(tag=tag)
+    count = len(channels)
+    if count == 0:
+        msg = "No channels are currently tracked."
+        if tag:
+            msg = f"No channels tagged {tag!r} are currently tracked."
+    else:
+        names = [c.get("name", c["channel_id"]) for c in channels]
+        suffix = f" tagged {tag!r}" if tag else ""
+        msg = (
+            f"Tracking {count} channel{'s' if count != 1 else ''}"
+            f"{suffix}: {', '.join(names)}."
+        )
+    return {
+        "channels": channels,
+        "count": count,
+        "tag": tag,
+        "user_facing_message": msg,
+    }
+
+
+def main() -> None:
+    """Entry point for the `podcast-summarizer-mcp` console script.
+
+    Communicates over stdio with any MCP host (Claude Desktop, Claude
+    Code, OpenClaw, etc.). Process lifecycle is the host's responsibility.
+    """
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()

@@ -11,12 +11,13 @@ import json
 import os
 import re
 import tempfile
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from google import genai
 from google.genai import types
 
-PROMPT = """You're a podcast analyzer who summarize Youtube videos and distills potential invesmtment recommendations.
+DEFAULT_PROMPT = """You're a podcast analyzer who summarize Youtube videos and distills potential invesmtment recommendations.
 
 ## You task ##
 Analyze if a video has explicit invesment recommendations:
@@ -65,6 +66,22 @@ This episode of *Forward Guidance* features Felix Jauvin, Quinn Thompson, and Ty
     *   (10:12-10:24) "You need concentrated portfolios as opposed to diverse portfolios."
 """
 
+def get_default_prompt() -> str:
+    """Return the prompt used when callers don't pass an explicit one.
+
+    Override path: set $VIDEO_ANALYSIS_PROMPT_PATH to a file (tilde
+    expansion supported). The file is read fresh on every call so users
+    can edit prompts without restarting the MCP. Raises FileNotFoundError
+    if the path is set but doesn't exist — fail loud rather than silently
+    falling back, since silent fallback would mislead users editing the
+    file.
+    """
+    override = os.environ.get("VIDEO_ANALYSIS_PROMPT_PATH")
+    if override:
+        return Path(override).expanduser().read_text(encoding="utf-8")
+    return DEFAULT_PROMPT
+
+
 _TIMESTAMP_RE = re.compile(r"\((\d{1,2}):(\d{2})\)")
 # Matches the v= parameter inside any youtube.com/watch URL regardless of where v= sits
 # in the query string (Gemini sometimes emits ?t=...&v=... instead of ?v=...&t=...).
@@ -108,14 +125,20 @@ class GeminiClient:
         self,
         video_entries: List[Dict[str, object]],
         display_name: str = "video-analysis-batch",
+        prompt: Optional[str] = None,
     ) -> str:
         """Upload a JSONL of video-analysis requests and create a batch job.
 
         Each entry must have: `key` (stable id, e.g. video_id), `video_url`.
         Returns the batch job name (e.g. "batches/xxx") used by poll/fetch.
+
+        `prompt` overrides the default for THIS batch. If omitted,
+        get_default_prompt() is used (which itself honours
+        $VIDEO_ANALYSIS_PROMPT_PATH).
         """
         if not video_entries:
             raise ValueError("video_entries must not be empty")
+        prompt_text = prompt if prompt is not None else get_default_prompt()
 
         lines: List[str] = []
         for e in video_entries:
@@ -130,7 +153,7 @@ class GeminiClient:
                                 {
                                     "role": "user",
                                     "parts": [
-                                        {"text": PROMPT},
+                                        {"text": prompt_text},
                                         {
                                             "file_data": {
                                                 "mime_type": "video/*",
@@ -260,15 +283,19 @@ class GeminiClient:
         video_id: str,
         video_duration: int,
         max_retries: int = 3,
+        prompt: Optional[str] = None,
     ) -> dict:
+        """Analyze a video with Gemini. `prompt` overrides the default
+        for this call only. If omitted, get_default_prompt() is used."""
         last_error: Optional[str] = None
+        prompt_text = prompt if prompt is not None else get_default_prompt()
         for attempt in range(1, max_retries + 1):
             try:
                 resp = self.client.models.generate_content(
                     model=self.MODEL,
                     contents=types.Content(
                         parts=[
-                            types.Part(text=PROMPT),
+                            types.Part(text=prompt_text),
                             types.Part(file_data=types.FileData(file_uri=video_url)),
                         ]
                     ),

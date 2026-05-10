@@ -1,4 +1,4 @@
-# Test Plan — video-summarizer-mcp
+# Test Plan — podcast-summarizer-mcp
 
 TDD spec for the `feat/no-api-discovery` branch. Tests are written first; implementation must make them pass.
 
@@ -66,18 +66,18 @@ nvm use 22 && npm install -g <openclaw-package>
 which openclaw  # should resolve under nvm path
 ```
 
-If npm-distributed unavailable, fall back to running on DGX with `--profile video-summarizer-test`. Same isolation, slower iteration.
+If npm-distributed unavailable, fall back to running on DGX with `--profile podcast-summarizer-test`. Same isolation, slower iteration.
 
 ### 2. Initialize the isolated profile
 
 ```bash
-openclaw --profile video-summarizer-test onboard
-# Creates ~/.openclaw-video-summarizer-test/{openclaw.json, agents/, ...}
+openclaw --profile podcast-summarizer-test onboard
+# Creates ~/.openclaw-podcast-summarizer-test/{openclaw.json, agents/, ...}
 ```
 
 This produces a totally separate state tree. Nothing in `~/.openclaw/` (finance) or `~/.openclaw-career/` is touched.
 
-### 3. Configure `~/.openclaw-video-summarizer-test/openclaw.json`
+### 3. Configure `~/.openclaw-podcast-summarizer-test/openclaw.json`
 
 Minimum config — single agent, single MCP, no Telegram, cheap model:
 
@@ -100,13 +100,13 @@ Minimum config — single agent, single MCP, no Telegram, cheap model:
   },
   "mcp": {
     "servers": {
-      "video-summarizer": {
-        "command": "/Users/kai/Documents/test/video-summarizer-mcp/start_server.sh",
+      "podcast-summarizer": {
+        "command": "/Users/kai/Documents/test/podcast-summarizer-mcp/start_server.sh",
         "env": {
           "GEMINI_API_KEY": "${GEMINI_API_KEY}",
-          "VIDEO_ANALYSIS_STATE_PATH": "${HOME}/.openclaw-video-summarizer-test/video-state.json",
-          "VIDEO_ANALYSIS_CHANNELS_PATH": "${HOME}/.openclaw-video-summarizer-test/channels.json",
-          "VIDEO_ANALYSIS_BATCH_METADATA_PATH": "${HOME}/.openclaw-video-summarizer-test/batches.json"
+          "VIDEO_ANALYSIS_STATE_PATH": "${HOME}/.openclaw-podcast-summarizer-test/video-state.json",
+          "VIDEO_ANALYSIS_CHANNELS_PATH": "${HOME}/.openclaw-podcast-summarizer-test/channels.json",
+          "VIDEO_ANALYSIS_BATCH_METADATA_PATH": "${HOME}/.openclaw-podcast-summarizer-test/batches.json"
         }
       }
     }
@@ -124,12 +124,12 @@ Minimum config — single agent, single MCP, no Telegram, cheap model:
 
 ### 4. Test agent persona
 
-`~/.openclaw-video-summarizer-test/workspace-test/SOUL.md`:
+`~/.openclaw-podcast-summarizer-test/workspace-test/SOUL.md`:
 
 ```markdown
-# Test Agent — video-summarizer
+# Test Agent — podcast-summarizer
 
-You exist to test the video-summarizer MCP. Behavior:
+You exist to test the podcast-summarizer MCP. Behavior:
 - When user asks to add/remove/list channels, use the channel registry tools
 - When user asks to look up info, do NOT mutate the registry — search and report
 - For ambiguous requests (multiple matches, vague topics), ask for clarification rather than guessing
@@ -144,7 +144,7 @@ Single-purpose persona. No domain bias. Mirrors how a generic LLM caller would i
 `tests/openclaw/conftest.py` provides a helper that runs:
 
 ```bash
-openclaw --profile video-summarizer-test agent \
+openclaw --profile podcast-summarizer-test agent \
   --agent testbot \
   --message "<test query>" \
   --reply-channel stdout \

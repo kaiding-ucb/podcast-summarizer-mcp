@@ -1,18 +1,18 @@
 """Disk-backed async job store for analyze_video_start / analyze_video_result.
 
 Why disk-backed, not in-memory:
-  openclaw spawns a fresh video-analysis MCP process per session. A job
-  created by `analyze_video_start` in process A may be polled by
-  `analyze_video_result` in process B. An in-memory dict loses jobs across
-  processes — the symptom was polls returning {status: "not_found"} for
-  job_ids that openclaw had just minted. Persisting to a single JSON file
-  on disk (fcntl-locked, atomic writes) lets every MCP process see the
-  same store.
+  Some MCP hosts spawn a fresh server process per session, request, or
+  config-reload. A job created by `analyze_video_start` in process A may
+  later be polled by `analyze_video_result` in process B. An in-memory
+  dict loses jobs across processes — the symptom would be polls returning
+  {status: "not_found"} for job_ids the host had just minted. Persisting
+  to a single JSON file on disk (fcntl-locked, atomic writes) lets every
+  MCP process see the same store.
 
 Worker liveness:
   The actual Gemini call runs in a thread inside the process that handled
-  `analyze_video_start`. If that process dies (gateway bounce, watchdog
-  kill, crash) the thread goes with it and the job sits in "running"
+  `analyze_video_start`. If that process dies (host restart, OS kill,
+  crash) the thread goes with it and the job would sit in "running"
   forever. A monitor thread per job writes `last_heartbeat_at` every
   HEARTBEAT_INTERVAL_SECONDS. When any poll sees status in {pending,
   running} with a heartbeat older than STALE_THRESHOLD_SECONDS, the job
@@ -185,11 +185,11 @@ class JobStore:
             jobs.pop(jid, None)
 
 
-# Shared default path — same convention as video-analysis-state.json.
+# Shared default path — under the same root as channels.json + video-state.json.
 # Override with VIDEO_ANALYSIS_JOBS_PATH env var.
 _DEFAULT_JOBS_PATH = os.environ.get(
     "VIDEO_ANALYSIS_JOBS_PATH",
-    os.path.expanduser("~/.openclaw/video-analysis-jobs.json"),
+    os.path.expanduser("~/.podcast-summarizer-mcp/jobs.json"),
 )
 
 store = JobStore(_DEFAULT_JOBS_PATH)
