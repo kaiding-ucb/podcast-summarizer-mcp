@@ -97,6 +97,67 @@ The agent picks `analyze_video_start` (parallel, full price) by default
 and `analyze_videos_batch_start` (50% off, async) only when you say
 "no rush" / "overnight".
 
+---
+
+## 📱 Use via Telegram, WhatsApp & More (OpenClaw)
+
+Connect this MCP to **Telegram, WhatsApp, Discord** and 20+ messaging
+platforms via [OpenClaw](https://openclaw.ai) — a self-hosted AI
+gateway. Talk to your podcast research agent from your phone, anywhere.
+
+```
+Telegram → OpenClaw agent (Claude / Gemini / GPT) → podcast-summarizer-mcp → Gemini + YouTube
+```
+
+OpenClaw routes messages from your chat platform of choice to an AI
+agent. The agent talks to this MCP over standard stdio — no Python
+wrapper or shim required.
+
+### Setup
+
+```bash
+# 1. Install OpenClaw (Node 22+)
+npm install -g openclaw
+
+# 2. Add a Telegram bot token (interactive — paste BotFather token)
+openclaw configure --section channels
+
+# 3. Add this MCP + agent + model to ~/.openclaw/openclaw.json:
+#    (already covered in Quick Start — use the OpenClaw snippet)
+openclaw config set agents.defaults.model "anthropic/claude-sonnet-4-5"
+
+# 4. Start the gateway
+openclaw gateway
+```
+
+### Pick a model
+
+Tool-use reliability matters when the agent is driving multi-step
+workflows from a chat thread.
+
+| Provider | Model id | API key |
+|---|---|---|
+| **Anthropic** (recommended) | `anthropic/claude-sonnet-4-5` | [console.anthropic.com](https://console.anthropic.com) |
+| **Google Gemini** | `google/gemini-3.1-pro-preview` | [aistudio.google.com](https://aistudio.google.com) |
+| **OpenAI** | `openai/gpt-4o-mini` | [platform.openai.com](https://platform.openai.com) |
+| **OpenRouter** (aggregator) | `openrouter/anthropic/claude-sonnet-4` | [openrouter.ai/keys](https://openrouter.ai/keys) |
+
+Avoid `gemini-3-flash-preview` for chat-driven flows — it sometimes
+hallucinates "I've added X" without calling the tool. Pro / Sonnet /
+Opus / GPT-4 all execute reliably.
+
+### Try it
+
+Once your bot is alive, message it:
+
+> Add Forward Guidance to my channels
+>
+> What channels am I tracking?
+>
+> Discover today's new videos and summarize the newest one
+
+The agent will call this MCP's tools and reply with results — directly
+in your Telegram / WhatsApp / Discord chat.
 
 ---
 
