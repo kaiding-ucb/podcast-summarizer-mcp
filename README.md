@@ -1,6 +1,6 @@
 # podcast-summarizer-mcp
 
-MCP that works with OpenClaw, Claude Desktop, Claude Code. Search & discover YouTube channels via natural language and summarize videos with no transcripts or subtitles required.
+MCP that works with **OpenClaw, Claude Desktop, Claude Code**. Search & discover YouTube channels via natural language and summarize videos with **no transcripts or subtitles required**.
 
 ## Quick start (5 minutes)
 
