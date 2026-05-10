@@ -5,7 +5,7 @@ MCP that works with **OpenClaw, Claude Desktop, Claude Code**. Search & discover
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![MCP](https://img.shields.io/badge/MCP-Ready-brightgreen.svg)](https://modelcontextprotocol.io/)
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/kaiding-ucb/podcast-summarizer-mcp/releases)
+[![PyPI](https://img.shields.io/pypi/v/podcast-summarizer-mcp.svg?color=blue)](https://pypi.org/project/podcast-summarizer-mcp/)
 
 [![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-Ready-D97757.svg)](https://claude.ai/download)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-Ready-CB785C.svg)](https://docs.claude.com/en/docs/claude-code)
@@ -18,21 +18,18 @@ MCP that works with **OpenClaw, Claude Desktop, Claude Code**. Search & discover
 Python 3.10+ and a Gemini API key (free) from
 <https://aistudio.google.com>.
 
-### 1. Install from source
+### 1. Install
 
 ```bash
-git clone https://github.com/kaiding-ucb/podcast-summarizer-mcp
-cd podcast-summarizer-mcp
-python3 -m venv .venv && .venv/bin/pip install -e .
-
-# Note the absolute path — you'll paste it into your host config below.
-echo "$(pwd)/.venv/bin/podcast-summarizer-mcp"
+pip install podcast-summarizer-mcp
 ```
+
+This puts `podcast-summarizer-mcp` on your PATH. (Or use `pipx install`
+/ `uvx install` if you prefer isolated tools.)
 
 ### 2. Configure ONE host
 
-Pick whichever you use. Replace `/ABSOLUTE/PATH` with what step 1 echoed,
-and `AIza...` with your Gemini key.
+Pick whichever you use. Replace `AIza...` with your Gemini key.
 
 #### Claude Desktop
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -41,7 +38,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 {
   "mcpServers": {
     "podcast-summarizer": {
-      "command": "/ABSOLUTE/PATH",
+      "command": "podcast-summarizer-mcp",
       "env": { "GEMINI_API_KEY": "AIza..." }
     }
   }
@@ -54,7 +51,7 @@ Quit Claude Desktop fully (⌘Q) and reopen. Click the 🔌 icon —
 ```bash
 claude mcp add podcast-summarizer \
   --env GEMINI_API_KEY=AIza... \
-  -- /ABSOLUTE/PATH
+  -- podcast-summarizer-mcp
 
 claude mcp list   # should show podcast-summarizer
 ```
@@ -63,11 +60,16 @@ claude mcp list   # should show podcast-summarizer
 Add to `~/.openclaw/openclaw.json` under `mcp.servers`:
 ```json
 "podcast-summarizer": {
-  "command": "/ABSOLUTE/PATH",
+  "command": "podcast-summarizer-mcp",
   "env": { "GEMINI_API_KEY": "AIza..." }
 }
 ```
 Restart OpenClaw (`pkill -f openclaw-gateway; openclaw`).
+
+> **Installing from source instead?** `git clone`, `cd`, then
+> `python3 -m venv .venv && .venv/bin/pip install -e .`, and use the
+> absolute path `$(pwd)/.venv/bin/podcast-summarizer-mcp` for the
+> `command` field above.
 
 ---
 ## Example prompts
