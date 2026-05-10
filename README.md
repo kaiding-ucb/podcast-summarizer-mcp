@@ -72,7 +72,7 @@ Restart OpenClaw (`pkill -f openclaw-gateway; openclaw`).
 ---
 ## Example prompts
 
-**Discover** (no state mutation):
+**Discover**:
 > Does Andrej Karpathy have a YouTube channel?
 >
 > Find me a few investing podcasts.
@@ -129,36 +129,6 @@ openclaw config set agents.defaults.model "anthropic/claude-sonnet-4-5"
 # 4. Start the gateway
 openclaw gateway
 ```
-
-### Pick a model
-
-Tool-use reliability matters when the agent is driving multi-step
-workflows from a chat thread.
-
-| Provider | Model id | API key |
-|---|---|---|
-| **Anthropic** (recommended) | `anthropic/claude-sonnet-4-5` | [console.anthropic.com](https://console.anthropic.com) |
-| **Google Gemini** | `google/gemini-3.1-pro-preview` | [aistudio.google.com](https://aistudio.google.com) |
-| **OpenAI** | `openai/gpt-4o-mini` | [platform.openai.com](https://platform.openai.com) |
-| **OpenRouter** (aggregator) | `openrouter/anthropic/claude-sonnet-4` | [openrouter.ai/keys](https://openrouter.ai/keys) |
-
-Avoid `gemini-3-flash-preview` for chat-driven flows — it sometimes
-hallucinates "I've added X" without calling the tool. Pro / Sonnet /
-Opus / GPT-4 all execute reliably.
-
-### Try it
-
-Once your bot is alive, message it:
-
-> Add Forward Guidance to my channels
->
-> What channels am I tracking?
->
-> Discover today's new videos and summarize the newest one
-
-The agent will call this MCP's tools and reply with results — directly
-in your Telegram / WhatsApp / Discord chat.
-
 ---
 
 ## Tools
