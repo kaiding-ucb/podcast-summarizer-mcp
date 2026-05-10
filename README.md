@@ -204,30 +204,103 @@ Edit `~/.openclaw/openclaw.json` and add the server entry:
 
 ---
 
-## Tools the MCP exposes
+## Tools & capabilities
 
-13 tools, grouped by purpose. The natural-language host LLM picks
-between them — you don't call them directly.
+The MCP exposes **13 tools** that your AI assistant picks between
+based on what you ask. You don't call them directly — just describe
+what you want in natural language.
 
-**Channel discovery (no YouTube API key needed)**
-- `search_youtube_channels(query, max_results=5)` — fuzzy search
-- `resolve_youtube_channel(handle_or_url)` — exact handle/URL lookup
-- `get_channel_metadata(channel_id)` — sub count + recent titles
+### All tools at a glance
 
-**Channel registry (MCP-owned state)**
-- `add_tracked_channel(channel_id, name, handle?, tags?)`
-- `remove_tracked_channel(channel_id)`
-- `list_tracked_channels(tag?)`
+| Tool | Purpose |
+|---|---|
+| **Channel discovery** *(no YouTube API key required)* | |
+| `search_youtube_channels(query, max_results=5)` | Fuzzy search YouTube for channels matching a free-text query |
+| `resolve_youtube_channel(handle_or_url)` | Resolve a `@handle` or full channel URL to a ChannelInfo |
+| `get_channel_metadata(channel_id)` | Subscriber count, description, recent video titles |
+| **Channel registry** *(MCP-owned state at `~/.podcast-summarizer-mcp/channels.json`)* | |
+| `add_tracked_channel(channel_id, name, handle?, tags?)` | Add a channel to the registry (idempotent) |
+| `remove_tracked_channel(channel_id)` | Remove a channel from the registry |
+| `list_tracked_channels(tag?)` | List all tracked channels, optionally filtered by tag |
+| **Video discovery & analysis** | |
+| `discover_new_videos(channel_ids?, tag?, ...)` | Return videos posted since the last poll, per channel |
+| `get_video_info(video_url)` | Cheap metadata-only lookup (no Gemini cost) |
+| `analyze_video_start(video_url, prompt?)` | Launch Gemini analysis as a background job, returns a `job_id` |
+| `analyze_video_result(job_id, wait_seconds=10)` | Poll for the analyze_video_start result |
+| `analyze_videos_batch_start(video_urls, prompt?)` | 50% cheaper batch path for non-urgent multi-video |
+| `analyze_videos_batch_result(batch_job_name)` | Poll for the batch result |
+| `get_state(channel_ids?)` | Read-only view of the per-channel last-seen state |
 
-**Video discovery & analysis**
-- `discover_new_videos(channel_ids?, tag?, ...)` — what's new since last poll
-- `get_video_info(video_url)` — cheap metadata-only lookup
-- `analyze_video_start(video_url, prompt?)` + `analyze_video_result(job_id)`
-  — async Gemini analysis with start/poll pattern
-- `analyze_videos_batch_start(video_urls, prompt?)` +
-  `analyze_videos_batch_result(batch_job_name)` — 50% off, async,
-  for non-urgent batches
-- `get_state(channel_ids?)` — last-seen video per channel
+### What you can actually do with it
+
+#### 1. Search and discover channels in natural language
+
+The agent picks `search_youtube_channels`, `resolve_youtube_channel`,
+or `get_channel_metadata` automatically. **None of these mutate state**,
+so they're safe to use freely for exploration.
+
+Try in chat:
+
+> Does Andrej Karpathy have a YouTube channel?
+>
+> What does the Forward Guidance channel cover lately?
+>
+> I'm looking for a good YouTube channel about advanced semiconductor packaging — give me three options.
+>
+> Find me a few investing podcasts.
+
+For ambiguous topic-only queries the agent presents 2–3 candidates and
+asks you to pick rather than guessing.
+
+#### 2. Add / remove channels in your tracked list
+
+Adds and removes survive restarts (state lives at
+`~/.podcast-summarizer-mcp/channels.json`). Tags are arbitrary strings
+for grouping — useful when you want one MCP backing multiple agents
+or topic buckets.
+
+Try in chat:
+
+> Add Forward Guidance to my channel list
+>
+> Add @ForwardGuidanceBW
+>
+> Add the All-In podcast YouTube channel
+>
+> Add Forward Guidance and Macro Voices
+>
+> What channels am I tracking?
+>
+> Remove Forward Guidance from my channels
+
+With tagging:
+
+> Add Forward Guidance and tag it "macro"
+>
+> Show me my macro-tagged channels
+
+#### 3. Summarize videos from your channels
+
+Two paths: summarize a specific video, or sweep your tracked channels
+for new uploads and summarize them.
+
+Single video (~3–10 minutes, full Gemini cost):
+
+> Summarize this video: https://www.youtube.com/watch?v=MO9ZTZPUwXY
+
+Across all your tracked channels:
+
+> Discover any new videos from my tracked channels and summarize the newest one
+>
+> Summarize today's new videos from all my channels in parallel
+
+For overnight backlogs (50% cheaper, async, up to 24h SLA):
+
+> I have a backlog of 20 videos to summarize — no rush, do it overnight to save cost
+
+The agent picks `analyze_video_start` (sync, parallel) for interactive
+requests and `analyze_videos_batch_start` only when you explicitly
+opt into the slower-but-cheaper batch path.
 
 ---
 
