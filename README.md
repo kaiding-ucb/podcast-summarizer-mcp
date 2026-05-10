@@ -19,6 +19,94 @@ other host that speaks the MCP stdio protocol.
 
 ---
 
+## Quick start (5 minutes)
+
+You need Python 3.10+ and a Gemini API key (free) from
+<https://aistudio.google.com>.
+
+### 1. Install from source
+
+```bash
+git clone https://github.com/kaiding-ucb/video-summarizer-mcp
+cd video-summarizer-mcp
+python3 -m venv .venv && .venv/bin/pip install -e .
+
+# Note the absolute path — you'll paste it into your host config below.
+echo "$(pwd)/.venv/bin/video-summarizer-mcp"
+```
+
+### 2. Configure ONE host
+
+Pick whichever you use. Replace `/ABSOLUTE/PATH` with what step 1 echoed,
+and `AIza...` with your Gemini key.
+
+#### Claude Desktop
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
+(macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+```json
+{
+  "mcpServers": {
+    "video-summarizer": {
+      "command": "/ABSOLUTE/PATH",
+      "env": { "GEMINI_API_KEY": "AIza..." }
+    }
+  }
+}
+```
+Quit Claude Desktop fully (⌘Q) and reopen. Click the 🔌 icon —
+`video-summarizer` should be listed.
+
+#### Claude Code
+```bash
+claude mcp add video-summarizer \
+  --env GEMINI_API_KEY=AIza... \
+  -- /ABSOLUTE/PATH
+
+claude mcp list   # should show video-summarizer
+```
+
+#### OpenClaw
+Add to `~/.openclaw/openclaw.json` under `mcp.servers`:
+```json
+"video-summarizer": {
+  "command": "/ABSOLUTE/PATH",
+  "env": { "GEMINI_API_KEY": "AIza..." }
+}
+```
+Restart OpenClaw (`pkill -f openclaw-gateway; openclaw`).
+
+### 3. Smoke-test it
+
+In your host's chat, ask:
+
+> **Add Forward Guidance to my channels**
+
+Then verify it actually wrote to disk:
+
+```bash
+cat ~/.video-summarizer-mcp/channels.json
+```
+
+You should see one entry whose `channel_id` starts with `UC` and `name`
+contains "Forward Guidance". Then try:
+
+> **What channels am I tracking?**
+
+Should reply with the channel you just added. Then try:
+
+> **Summarize this video: https://www.youtube.com/watch?v=MO9ZTZPUwXY**
+
+Takes 3–10 minutes (real Gemini analysis). The agent will start the job,
+poll for completion, and return a structured summary with timestamps.
+
+### Reset state if needed
+
+```bash
+rm -rf ~/.video-summarizer-mcp/   # wipes channel registry + per-channel state
+```
+
+---
+
 ## Install
 
 You'll need:
