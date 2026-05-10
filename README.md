@@ -2,6 +2,17 @@
 
 MCP that works with **OpenClaw, Claude Desktop, Claude Code**. Search & discover YouTube channels via natural language and summarize videos with **no transcripts or subtitles required**.
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![MCP](https://img.shields.io/badge/MCP-Ready-brightgreen.svg)](https://modelcontextprotocol.io/)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](https://github.com/kaiding-ucb/podcast-summarizer-mcp/releases)
+
+[![Claude Desktop](https://img.shields.io/badge/Claude_Desktop-Ready-D97757.svg)](https://claude.ai/download)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-Ready-CB785C.svg)](https://docs.claude.com/en/docs/claude-code)
+[![OpenClaw](https://img.shields.io/badge/OpenClaw-Ready-7C3AED.svg)](https://github.com/openclawai)
+
+---
+
 ## Quick start (5 minutes)
 
 Python 3.10+ and a Gemini API key (free) from
