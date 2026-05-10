@@ -1,10 +1,10 @@
 # podcast-summarizer-mcp
 
-MCP that works with OpenClaw, Claude Desktop, Claude Code. Search & discover YouTube channels via natural language and video summaries with no transcripts or subtitles required.
+MCP that works with OpenClaw, Claude Desktop, Claude Code. Search & discover YouTube channels via natural language and summarize videos with no transcripts or subtitles required.
 
 ## Quick start (5 minutes)
 
-You need Python 3.10+ and a Gemini API key (free) from
+Python 3.10+ and a Gemini API key (free) from
 <https://aistudio.google.com>.
 
 ### 1. Install from source
